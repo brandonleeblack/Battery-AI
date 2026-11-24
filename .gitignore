@@ -4,3 +4,4 @@ obj/
 dist/
 .superpowers/
 *.user
+.claude/settings.local.json
