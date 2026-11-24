@@ -1,0 +1,10 @@
+<Project>
+  <!-- Shared by every project. Bump Version before tagging a release (vX.Y.Z). -->
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <Product>Battery</Product>
+    <Authors>brandonleeblack</Authors>
+    <Copyright>Copyright (c) 2026 brandonleeblack. MIT License.</Copyright>
+    <RepositoryUrl>https://github.com/brandonleeblack/Battery-AI</RepositoryUrl>
+  </PropertyGroup>
+</Project>

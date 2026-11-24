@@ -23,14 +23,8 @@ public sealed class Settings
 
     public bool StartWithWindows { get; set; } = true;
 
-    /// <summary>Before connections were tracked: true once claude.ai had given a reading. Read only to migrate.</summary>
-    public bool ClaudeWebSeen { get; set; }
-
-    /// <summary>
-    /// Apps confirmed connected: signed in (Claude, OpenCode) or agreed to (Codex). Only these are read.
-    /// Null until set up from the older settings on first start of this version.
-    /// </summary>
-    public List<string>? ConnectedApps { get; set; }
+    /// <summary>Apps confirmed connected: signed in (Claude, OpenCode) or agreed to (Codex). Only these are read.</summary>
+    public List<string> ConnectedApps { get; set; } = new();
 
     /// <summary>Apps whose sign-in the site ended (not disconnected by the user): the hover says "Signed out".</summary>
     public List<string> LapsedApps { get; set; } = new();

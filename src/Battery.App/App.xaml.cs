@@ -42,7 +42,18 @@ public partial class App : Application
 
     bool IsShown(string providerId) => ShownApps.Visible(_settings.HiddenProviders).Any(a => a.Id == providerId);
 
-    bool IsConnected(string providerId) => _settings.ConnectedApps?.Contains(providerId) == true;
+    bool IsConnected(string providerId) => _settings.ConnectedApps.Contains(providerId);
+
+    /// <summary>
+    /// <c>--demo</c>: made-up bars for screenshots. Nothing is read or signed in to, readings are not
+    /// saved, and it runs beside a normal copy of Battery.
+    /// </summary>
+    bool _demo;
+
+    void SaveSettings()
+    {
+        if (!_demo) _settings.Save();
+    }
 
     /// <summary>
     /// A source is read only while its app is shown and connected. The Claude Code status line has its
@@ -65,25 +76,9 @@ public partial class App : Application
 
     void SetConnected(string providerId, bool connected, bool lapsed = false)
     {
-        _settings.ConnectedApps = AppConnections.WithConnected(_settings.ConnectedApps ?? new(), providerId, connected).ToList();
+        _settings.ConnectedApps = AppConnections.WithConnected(_settings.ConnectedApps, providerId, connected).ToList();
         _settings.LapsedApps = AppConnections.WithConnected(_settings.LapsedApps, providerId, lapsed).ToList();
-        _settings.Save();
-    }
-
-    /// <summary>
-    /// First start of the version that tracks connections: carry over what was working. claude.ai was
-    /// signed in if it ever gave a reading; Codex was being read if it has a reading. OpenCode moved to
-    /// its own browser profile, so its old sign-in does not carry over: it shows as signed out.
-    /// </summary>
-    void MigrateConnections()
-    {
-        if (_settings.ConnectedApps is not null) return;
-        var connected = new List<string>();
-        if (_settings.ClaudeWebSeen) connected.Add(ProviderIds.Claude);
-        if (_store.Current.ContainsKey(ProviderIds.Codex)) connected.Add(ProviderIds.Codex);
-        _settings.ConnectedApps = connected;
-        if (_store.Current.ContainsKey(ProviderIds.OpenCode)) _settings.LapsedApps.Add(ProviderIds.OpenCode);
-        _settings.Save();
+        SaveSettings();
     }
 
     protected override void OnStartup(StartupEventArgs e)
@@ -96,7 +91,9 @@ public partial class App : Application
             args.Handled = true;
         };
 
-        _singleInstance = new Mutex(initiallyOwned: true, @"Local\Battery.SingleInstance", out var isFirst);
+        _demo = e.Args.Contains("--demo", StringComparer.OrdinalIgnoreCase);
+        var instanceName = _demo ? @"Local\Battery.Demo" : @"Local\Battery.SingleInstance";
+        _singleInstance = new Mutex(initiallyOwned: true, instanceName, out var isFirst);
         if (!isFirst)
         {
             _singleInstance.Dispose();
@@ -106,18 +103,31 @@ public partial class App : Application
         }
 
         _settings = Settings.Load();
-        if (!_settings.FirstRunDone)
+        if (_demo)
+        {
+            // Defaults only: the demo neither shows nor changes the real settings.
+            _settings = new Settings { BarStyle = _settings.BarStyle };
+        }
+        else if (!_settings.FirstRunDone)
         {
             // Start with Windows is on by default: applied once, after that the menu owns it.
             StartWithWindows.Set(_settings.StartWithWindows);
             _settings.FirstRunDone = true;
-            _settings.Save();
+            SaveSettings();
+        }
+        else
+        {
+            StartWithWindows.RepointIfEnabled();
         }
 
         _themeWatcher = new SystemThemeWatcher();
         _themeWatcher.Changed += _ => RenderNow();
 
-        _store = new ReadingStore(AppPaths.ReadingsFile);
+        _store = new ReadingStore(_demo ? Path.Combine(Path.GetTempPath(), "battery-demo-readings.json") : AppPaths.ReadingsFile);
+        if (_demo)
+        {
+            foreach (var reading in DemoReadings.At(DateTimeOffset.Now).Values) _store.Put(reading);
+        }
         _store.Changed += () => Dispatcher.BeginInvoke(RenderNow);
 
         _strip = new StripWindow();
@@ -133,7 +143,12 @@ public partial class App : Application
         _strip.Show();
         Place();
 
-        MigrateConnections();
+        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+        _placeTimer = new DispatcherTimer(PlaceEvery, DispatcherPriority.Background, (_, _) => Place(), Dispatcher);
+        // The clock lines move and readings go stale even when nothing new arrives.
+        _renderTimer = new DispatcherTimer(RenderEvery, DispatcherPriority.Background, (_, _) => RenderNow(), Dispatcher);
+
+        if (_demo) return;   // no sources: nothing is read
 
         // Order matters: for Claude, the first source's hint is the advice shown. claude.ai comes first
         // because it is account-wide, covering Desktop and web use too.
@@ -155,11 +170,6 @@ public partial class App : Application
             provider.HintChanged += hint => Dispatcher.BeginInvoke(() => SetHint(source, hint));
             ApplyRunState(provider);   // hidden or not-connected apps are not read at all
         }
-
-        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
-        _placeTimer = new DispatcherTimer(PlaceEvery, DispatcherPriority.Background, (_, _) => Place(), Dispatcher);
-        // The clock lines move and readings go stale even when nothing new arrives.
-        _renderTimer = new DispatcherTimer(RenderEvery, DispatcherPriority.Background, (_, _) => RenderNow(), Dispatcher);
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -266,7 +276,7 @@ public partial class App : Application
             var size = _strip.PixelRect;
             var anchor = tray?.Left ?? taskbar.Right;
             _settings.OffsetFromTray = (anchor - (leftPx + size.Width)) / _strip.DpiScale;
-            _settings.Save();
+            SaveSettings();
         }
         Place();
     }
@@ -333,14 +343,18 @@ public partial class App : Application
         menu.Items.Add(Item("Refresh now", RefreshAll));
         // One item per app, worded the same way: "Sign in to …" / "Connect …" until confirmed, then only "Disconnect …".
         menu.Items.Add(new Separator());
-        foreach (var connection in AppConnections.All.Where(c => IsShown(c.ProviderId)))
+        foreach (var connection in AppConnections.All.Where(c => IsShown(c.ProviderId) && !_demo))
         {
             var id = connection.ProviderId;
             menu.Items.Add(IsConnected(id)
                 ? Item(connection.DisconnectLabel, () => Disconnect(id))
                 : Item(connection.ConnectLabel, () => Connect(id)));
         }
-        if (IsShown(ProviderIds.Claude))
+        if (_demo)
+        {
+            menu.Items.Add(new MenuItem { Header = "Demo: made-up figures", IsEnabled = false });
+        }
+        else if (IsShown(ProviderIds.Claude))
         {
             var statusLine = Item("Use Claude Code status line", () =>
             {
@@ -361,11 +375,11 @@ public partial class App : Application
             var enable = !StartWithWindows.IsEnabled();
             StartWithWindows.Set(enable);
             _settings.StartWithWindows = enable;
-            _settings.Save();
+            SaveSettings();
         });
         autostart.IsCheckable = true;
         autostart.IsChecked = StartWithWindows.IsEnabled();
-        menu.Items.Add(autostart);
+        if (!_demo) menu.Items.Add(autostart);
 
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("Quit", Shutdown));
@@ -398,7 +412,7 @@ public partial class App : Application
         return show;
     }
 
-/// <summary>"Bar style" submenu: Clean, Glass gel or Cells, one ticked.</summary>
+    /// <summary>"Bar style" submenu: Clean, Glass gel or Cells, one ticked.</summary>
     MenuItem BarStyleMenu()
     {
         var menu = new MenuItem { Header = "Bar style" };
@@ -407,7 +421,7 @@ public partial class App : Application
             var item = Item(name, () =>
             {
                 _settings.BarStyle = style.ToString();
-                _settings.Save();
+                SaveSettings();
                 RenderNow();
             });
             item.IsCheckable = true;
@@ -420,7 +434,7 @@ public partial class App : Application
     void ToggleApp(string id)
     {
         _settings.HiddenProviders = ShownApps.Toggle(_settings.HiddenProviders, id).ToList();
-        _settings.Save();
+        SaveSettings();
 
         foreach (var provider in _providers.Where(p => p.Id == id)) ApplyRunState(provider);
         RenderNow();

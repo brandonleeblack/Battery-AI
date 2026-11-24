@@ -8,9 +8,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>Battery.App</RootNamespace>
+    <AssemblyName>Battery</AssemblyName>
     <ApplicationIcon>Battery.ico</ApplicationIcon>
     <!-- Only for the tray icon (NotifyIcon); everything else is WPF. -->
     <UseWindowsForms>true</UseWindowsForms>
+    <!-- WinForms asks for its own DPI setting; this is a WPF app and the manifest's setting is the right one. -->
+    <NoWarn>$(NoWarn);WFAC010</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

@@ -23,6 +23,15 @@ static class StartWithWindows
         }
     }
 
+    /// <summary>
+    /// When the entry exists, points it at this copy of Battery, so it still works after the folder was
+    /// moved or the program renamed (Battery.App.exe became Battery.exe in 1.0).
+    /// </summary>
+    public static void RepointIfEnabled()
+    {
+        if (IsEnabled()) Set(true);
+    }
+
     public static void Set(bool enabled)
     {
         try

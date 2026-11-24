@@ -7,14 +7,8 @@ using Microsoft.Web.WebView2.Core;
 namespace Battery.App;
 
 /// <summary>
-/// One hidden WebView2 on Battery's private profile (%AppData%\Battery\WebView2), shared by the web
-/// sources. A read loads a page the user can open when signed in there, and captures the response to
-/// the usage request that page makes for itself. Battery never sees a password, never reads cookies,
-/// and never touches the main browser. Use on the UI thread; reads are serialised.
-/// </summary>
-/// <summary>
 /// Each site has its own browser profile inside Battery's WebView2 folder, so signing out of one leaves
-/// the other signed in. Claude keeps the default profile it has always used; OpenCode has its own.
+/// the other signed in. Claude uses the default profile; OpenCode has its own.
 /// </summary>
 public static class WebProfiles
 {
@@ -30,6 +24,12 @@ public static class WebProfiles
     }
 }
 
+/// <summary>
+/// Hidden WebView2s on Battery's private browser folder (%AppData%\Battery\WebView2), one per site
+/// profile. A read loads a page the user can open when signed in there, and captures the response to
+/// the usage request that page makes for itself. Battery never sees a password, never reads cookies,
+/// and never touches the main browser. Use on the UI thread; reads are serialised.
+/// </summary>
 public sealed class WebUsageReader : IDisposable
 {
     static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);

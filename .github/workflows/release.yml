@@ -1,0 +1,31 @@
+name: Release
+
+# Push a tag like v1.0.0 to build Battery and publish it as a GitHub Release.
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Test
+        run: dotnet test tests/Battery.Tests -c Release
+      - name: Publish
+        shell: pwsh
+        run: ./publish.ps1 -Version ("${{ github.ref_name }}".TrimStart('v'))
+      - name: Zip
+        shell: pwsh
+        run: Compress-Archive -Path dist/* -DestinationPath "Battery-${{ github.ref_name }}-win-x64.zip"
+      - name: Create release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" "Battery-${{ github.ref_name }}-win-x64.zip" --title "Battery ${{ github.ref_name }}" --generate-notes

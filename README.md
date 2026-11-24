@@ -3,6 +3,24 @@
 A small strip that floats on the Windows taskbar, just left of the system tray, showing how much of
 three AI subscriptions you have used: **Claude**, **Codex** and **OpenCode Go**, in that order.
 
+![The Battery strip on the taskbar, with its details panel open above it](docs/images/battery.png)
+
+> **Unofficial.** Battery is an independent project, not made by or affiliated with Anthropic,
+> OpenAI or OpenCode. It reads usage figures from places those services do not document for this
+> (their own web pages and local files), so it can stop working at any time, and using it may not be
+> covered by their terms. Use it at your own risk. Battery only reads; it never sends your data anywhere.
+
+## Download
+
+Get the latest `Battery-vX.Y.Z-win-x64.zip` from
+[Releases](https://github.com/brandonleeblack/Battery-AI/releases), unzip it to a folder you will
+keep (for example `%LocalAppData%\Programs\Battery`), and run `Battery.exe`. Keep
+`Battery.StatusLine.exe` in the same folder. Needs Windows 10 or 11; nothing else to install.
+
+The download is not code-signed, so the first time you run it Windows SmartScreen may say
+"Windows protected your PC". Choose **More info › Run anyway**. If you would rather not, build it
+yourself from source (below).
+
 Each app has a coloured dot and two bars: the **5-hour** window on top and the **weekly** window below.
 A bar fills with the percent **used**. A thin line on each bar shows how much of that window's time
 has gone by, so you can see at a glance whether you are ahead of the clock.
@@ -39,7 +57,7 @@ The colours follow the Windows mode that colours the taskbar (Settings › Perso
 "Choose your default Windows mode"): Graphite when dark, Daylight when light, switching live. The
 strip hides while a full-screen app is in front and while an auto-hide taskbar is tucked away.
 
-## Build and run
+## Build from source
 
 Needs Windows 10 or 11 and the .NET SDK 8 or later.
 
@@ -49,12 +67,22 @@ Needs Windows 10 or 11 and the .NET SDK 8 or later.
 
 This writes two self-contained executables to `dist\`:
 
-- `dist\Battery.App.exe`: the strip. Run this one.
+- `dist\Battery.exe`: the strip. Run this one.
 - `dist\Battery.StatusLine.exe`: the Claude Code helper. It must stay in the same folder.
 
-The icon is drawn by `tools\make-icon.ps1` (writes `src\Battery.App\Battery.ico`); run it again after
-changing the design. Move the whole `dist` folder wherever you like before choosing Start with Windows or Connect Claude
-Code, because both remember the path. Tests: `dotnet test`.
+Move the whole `dist` folder wherever you like before ticking **Use Claude Code status line**, because
+that remembers the path (untick and tick it again after moving). **Start with Windows** follows the
+folder by itself the next time you start Battery from its new place.
+
+Other things for developers:
+
+- Tests: `dotnet test`.
+- `Battery.exe --demo` shows made-up figures (every colour) without reading or signing in to anything,
+  and runs beside your normal copy. The screenshot above was taken that way.
+- The icon is drawn by `tools\make-icon.ps1` (writes `src\Battery.App\Battery.ico`); run it again after
+  changing the design.
+- Releases: bump `Version` in `Directory.Build.props`, then push a tag such as `v1.0.1`. The Release
+  workflow tests, builds and attaches the zip.
 
 ## Where the numbers come from
 
@@ -94,11 +122,11 @@ Limits:
 - If a Claude Code version drops `rate_limits`, that counts as "no reading".
 - Battery does not read Claude Code's stored login, so it cannot ask Anthropic directly.
 
-### Codex: nothing to connect
+### Codex: right-click › Connect Codex…
 
 Codex CLI writes session files under `%USERPROFILE%\.codex\sessions`. Its `token_count` lines carry
-rate-limit samples (used percent, window length, reset time), and Battery reads the newest one every
-minute.
+rate-limit samples (used percent, window length, reset time). **Connect Codex…** asks once, then
+Battery reads the newest sample every minute. There is no sign-in: it only reads those files.
 
 Limits:
 
@@ -152,4 +180,8 @@ OpenCode readers. It holds HTTP statuses and page paths with ids blanked, never 
    taken first.
 2. Right-click › untick **Start with Windows**. This removes
    `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Battery`.
-3. Right-click › **Quit**, then delete `%AppData%\Battery` and the `dist` folder.
+3. Right-click › **Quit**, then delete `%AppData%\Battery` and the folder Battery.exe is in.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).
