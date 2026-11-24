@@ -1,4 +1,7 @@
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
 using Battery.App.Native;
 using Battery.App.Providers;
@@ -12,16 +15,25 @@ public partial class App : Application
 {
     static readonly TimeSpan PlaceEvery = TimeSpan.FromSeconds(2);
     static readonly TimeSpan RenderEvery = TimeSpan.FromSeconds(30);
+    static readonly TimeSpan HoverShowAfter = TimeSpan.FromMilliseconds(300);
+    static readonly TimeSpan HoverHideAfter = TimeSpan.FromMilliseconds(200);
+    const double HoverGap = 10;
 
     Mutex? _singleInstance;
     Settings _settings = new();
     StripWindow _strip = null!;
+    HoverPanel _panel = null!;
     SystemThemeWatcher _themeWatcher = null!;
     DispatcherTimer _placeTimer = null!;
     DispatcherTimer _renderTimer = null!;
+    DispatcherTimer _hoverShow = null!;
+    DispatcherTimer _hoverHide = null!;
     ReadingStore _store = null!;
     readonly List<IUsageProvider> _providers = new();
     readonly Dictionary<string, string> _hints = new();   // UI thread only
+
+    /// <summary>Opens the OpenCode sign-in window; null until the OpenCode provider exists.</summary>
+    Action? _signInToOpenCode;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -37,6 +49,14 @@ public partial class App : Application
         }
 
         _settings = Settings.Load();
+        if (!_settings.FirstRunDone)
+        {
+            // Start with Windows is on by default: applied once, after that the menu owns it.
+            StartWithWindows.Set(_settings.StartWithWindows);
+            _settings.FirstRunDone = true;
+            _settings.Save();
+        }
+
         _themeWatcher = new SystemThemeWatcher();
         _themeWatcher.Changed += _ => RenderNow();
 
@@ -46,7 +66,11 @@ public partial class App : Application
         _strip = new StripWindow();
         _strip.DragFinished += OnDragFinished;
         _strip.DpiChanged += (_, _) => Dispatcher.BeginInvoke(Place);
-        RenderNow();   // last saved readings show immediately
+        _strip.MouseRightButtonUp += (_, args) => { args.Handled = true; ShowMenu(); };
+        _panel = new HoverPanel();
+        SetUpHover();
+
+        RenderNow();   // the last saved readings show immediately
         _strip.Show();
         Place();
 
@@ -92,9 +116,18 @@ public partial class App : Application
 
     void RenderNow()
     {
-        var apps = StripModel.Build(_store.Current, _hints, DateTimeOffset.Now);
-        _strip.Render(apps, Theme.For(_themeWatcher.IsLight));
+        var now = DateTimeOffset.Now;
+        var apps = StripModel.Build(_store.Current, _hints, now);
+        var theme = Theme.For(_themeWatcher.IsLight);
+        _strip.Render(apps, theme);
+        if (_panel.IsVisible)
+        {
+            _panel.Render(apps, theme, now);
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, PlacePanel);   // its height may have changed
+        }
     }
+
+    // ---- Placement ------------------------------------------------------------------------------
 
     /// <summary>Puts the strip on the taskbar, re-asserts topmost, and hides it when it should not show.</summary>
     void Place()
@@ -104,6 +137,7 @@ public partial class App : Application
         if (Taskbar.IsFullScreenAppActive(_strip.Handle) || Taskbar.IsAutoHiddenNow())
         {
             if (_strip.IsVisible) _strip.Hide();
+            _panel.Hide();
             return;
         }
         if (!_strip.IsVisible) _strip.Show();
@@ -116,6 +150,7 @@ public partial class App : Application
 
         _strip.DragBounds = hasTaskbar ? (taskbar.Left, taskbar.Right) : null;
         _strip.MoveToPixels(target.Left, target.Top);
+        PlacePanel();
     }
 
     void OnDragFinished(double leftPx)
@@ -129,4 +164,160 @@ public partial class App : Application
         }
         Place();
     }
+
+    // ---- Hover panel ----------------------------------------------------------------------------
+
+    void SetUpHover()
+    {
+        _hoverShow = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher) { Interval = HoverShowAfter };
+        _hoverShow.Tick += (_, _) => { _hoverShow.Stop(); ShowPanel(); };
+        _hoverHide = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher) { Interval = HoverHideAfter };
+        _hoverHide.Tick += (_, _) => { _hoverHide.Stop(); _panel.Hide(); };
+
+        _strip.MouseEnter += (_, _) => { _hoverHide.Stop(); if (!_panel.IsVisible) _hoverShow.Start(); };
+        _strip.MouseLeave += (_, _) => { _hoverShow.Stop(); if (_panel.IsVisible) _hoverHide.Start(); };
+        _panel.MouseEnter += (_, _) => _hoverHide.Stop();
+        _panel.MouseLeave += (_, _) => _hoverHide.Start();
+        // A press starts a drag or opens the menu; neither is a hover.
+        _strip.PreviewMouseDown += (_, _) => { _hoverShow.Stop(); _panel.Hide(); };
+    }
+
+    void ShowPanel()
+    {
+        if (_strip.IsDragging || !_strip.IsVisible) return;
+        var now = DateTimeOffset.Now;
+        _panel.Render(StripModel.Build(_store.Current, _hints, now), Theme.For(_themeWatcher.IsLight), now);
+        _panel.Opacity = 0;   // shown first so it has a size, then moved, then revealed
+        _panel.Show();
+        _panel.UpdateLayout();
+        PlacePanel();
+        _panel.Opacity = 1;
+    }
+
+    /// <summary>Above the strip, right edges aligned, 10 px gap, kept on the primary screen.</summary>
+    void PlacePanel()
+    {
+        if (!_panel.IsVisible) return;
+        var strip = _strip.PixelRect;
+        var panel = _panel.PixelRect;
+        var screen = Taskbar.PrimaryScreen();
+        var x = Math.Max(screen.Left, Math.Min(strip.Right - panel.Width, screen.Right - panel.Width));
+        var y = Math.Max(screen.Top, strip.Top - HoverGap * _strip.DpiScale - panel.Height);
+        _panel.MoveToPixels(x, y);
+    }
+
+    // ---- Right-click menu -----------------------------------------------------------------------
+
+    void ShowMenu()
+    {
+        _hoverShow.Stop();
+        _panel.Hide();
+
+        var menu = new ContextMenu();
+        menu.Items.Add(Item("Refresh now", RefreshAll));
+        if (_signInToOpenCode is { } signIn) menu.Items.Add(Item("Sign in to OpenCode…", signIn));
+
+        if (ClaudeHookInstaller.IsInstalled()) menu.Items.Add(Item("Disconnect Claude Code", DisconnectClaude));
+        else menu.Items.Add(Item("Connect Claude Code…", ConnectClaude));
+
+        var autostart = Item("Start with Windows", () =>
+        {
+            var enable = !StartWithWindows.IsEnabled();
+            StartWithWindows.Set(enable);
+            _settings.StartWithWindows = enable;
+            _settings.Save();
+        });
+        autostart.IsCheckable = true;
+        autostart.IsChecked = StartWithWindows.IsEnabled();
+        menu.Items.Add(autostart);
+
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Item("Quit", Shutdown));
+
+        // A menu needs its window in the foreground to close when the user clicks elsewhere. This is
+        // the one moment the strip takes focus, and only because the user asked for the menu.
+        SetForegroundWindow(_strip.Handle);
+        menu.PlacementTarget = _strip;
+        menu.Placement = PlacementMode.MousePoint;
+        menu.IsOpen = true;
+    }
+
+    static MenuItem Item(string header, Action onClick)
+    {
+        var item = new MenuItem { Header = header };
+        item.Click += (_, _) => onClick();
+        return item;
+    }
+
+    void RefreshAll()
+    {
+        foreach (var provider in _providers)
+        {
+            // Providers swallow their own failures; this also guards against one that does not.
+            _ = provider.RefreshAsync().ContinueWith(_ => { }, TaskScheduler.Default);
+        }
+    }
+
+    void ConnectClaude()
+    {
+        const string title = "Connect Claude Code";
+        if (!ClaudeHookInstaller.ShimExists)
+        {
+            MessageBox.Show("Battery.StatusLine.exe was not found beside Battery:\n" + ClaudeHookInstaller.ShimPath,
+                title, MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        var existing = ClaudeHookInstaller.ExistingCommand();
+        var keeps = existing is null
+            ? "You have no status line now, so Claude Code will still show none."
+            : "Your current status line keeps working: Battery runs it after saving the reading.\nCurrent command:\n" + existing;
+        var message =
+            "Battery reads Claude's usage from the data Claude Code passes to its status line.\n\n" +
+            "This will edit:\n" + ClaudeHookInstaller.SettingsPath + "\n\n" +
+            "A backup is made first at:\n" + ClaudeHookInstaller.BackupPath + "\n\n" +
+            "Only the status-line command changes, to:\n" + ClaudeHookInstaller.ShimPath + "\n\n" +
+            keeps + "\n\n" +
+            "Readings start the next time Claude Code updates its status line. " +
+            "\"Disconnect Claude Code\" puts it back.\n\nGo ahead?";
+
+        if (MessageBox.Show(message, title, MessageBoxButton.OKCancel, MessageBoxImage.Question,
+                MessageBoxResult.Cancel) != MessageBoxResult.OK)
+            return;
+
+        try
+        {
+            ClaudeHookInstaller.Install();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("settings.json was left unchanged.\n\n" + ex.Message, title,
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    void DisconnectClaude()
+    {
+        const string title = "Disconnect Claude Code";
+        var message =
+            "This puts your previous status line back in:\n" + ClaudeHookInstaller.SettingsPath + "\n\n" +
+            "A backup is made first at:\n" + ClaudeHookInstaller.BackupPath + "\n\nGo ahead?";
+        if (MessageBox.Show(message, title, MessageBoxButton.OKCancel, MessageBoxImage.Question,
+                MessageBoxResult.Cancel) != MessageBoxResult.OK)
+            return;
+
+        try
+        {
+            ClaudeHookInstaller.Uninstall();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show("settings.json was left unchanged.\n\n" + ex.Message, title,
+                MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool SetForegroundWindow(IntPtr hWnd);
 }

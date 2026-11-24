@@ -17,6 +17,9 @@ public record Theme(
     string PanelBackground,
     string PanelText)
 {
+    /// <summary>Outline of the hover panel. Not in the constructor so the plan's signature stays as written.</summary>
+    public string PanelBorder { get; init; } = "#34363F";
+
     public static Theme Graphite { get; } = new(
         Name: "Graphite",
         Box: "#2D2F37",
@@ -41,7 +44,10 @@ public record Theme(
         ClockLine: "#111318",
         SecondaryText: "#454852",
         PanelBackground: "#FFFFFF",
-        PanelText: "#111318");
+        PanelText: "#111318")
+    {
+        PanelBorder = "#CFD2DA",
+    };
 
     /// <summary>Graphite when the Windows (taskbar) mode is dark, Daylight when it is light.</summary>
     public static Theme For(bool systemUsesLightTheme) => systemUsesLightTheme ? Daylight : Graphite;

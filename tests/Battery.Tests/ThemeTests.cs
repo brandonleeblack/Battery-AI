@@ -38,6 +38,13 @@ public class ThemeTests
     }
 
     [Fact]
+    public void Panel_border_matches_the_mockup_in_each_theme()
+    {
+        Assert.Equal("#34363F", Theme.Graphite.PanelBorder);
+        Assert.Equal("#CFD2DA", Theme.Daylight.PanelBorder);
+    }
+
+    [Fact]
     public void Identity_dots_are_the_same_in_both_themes()
     {
         Assert.Equal("#E08A5B", Theme.DotFor(ProviderIds.Claude));
