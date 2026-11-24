@@ -8,7 +8,8 @@ $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
 $common = @('-c', 'Release', '-r', 'win-x64', '--self-contained', '-p:PublishSingleFile=true',
-            '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:DebugType=none',
+            '-p:IncludeNativeLibrariesForSelfExtract=true', '-p:EnableCompressionInSingleFile=true',
+            '-p:DebugType=none',
             '-p:ContinuousIntegrationBuild=true', '-o', 'dist')
 if ($Version) { $common += "-p:Version=$Version" }
 

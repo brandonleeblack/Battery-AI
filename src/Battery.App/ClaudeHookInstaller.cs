@@ -22,8 +22,21 @@ public static class ClaudeHookInstaller
     /// <summary>settings.json as it was just before Disconnect changed it.</summary>
     public static string UninstallBackupPath => SettingsPath + ".battery-uninstall-backup";
 
-    /// <summary>The shim sits beside the running app.</summary>
-    public static string ShimPath => Path.Combine(AppContext.BaseDirectory, "Battery.StatusLine.exe");
+    /// <summary>The shim sits beside the running app (beside the real file when started through a link, as winget does).</summary>
+    public static string ShimPath => Path.Combine(AppFolder(), "Battery.StatusLine.exe");
+
+    static string AppFolder()
+    {
+        try
+        {
+            var exe = Environment.ProcessPath;
+            var target = exe is null ? null : File.ResolveLinkTarget(exe, returnFinalTarget: true);
+            if (target is not null) return Path.GetDirectoryName(target.FullName)!;
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return AppContext.BaseDirectory;
+    }
 
     public static bool ShimExists => File.Exists(ShimPath);
 

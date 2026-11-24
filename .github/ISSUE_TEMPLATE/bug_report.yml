@@ -1,0 +1,49 @@
+name: Bug report
+description: Something in Battery is wrong or broken.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Leave out anything personal**: email addresses, account or organisation ids,
+        cookies, tokens and file paths with your user name in them. Security problems go to the
+        [Security tab](https://github.com/brandonleeblack/Battery-AI/security/advisories/new), not here.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you saw instead. A screenshot of the strip or hover panel helps.
+    validations:
+      required: true
+  - type: dropdown
+    id: apps
+    attributes:
+      label: Which apps does it affect?
+      multiple: true
+      options: [Claude (claude.ai), Claude (Claude Code status line), Codex, OpenCode Go, The strip or panel itself]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Battery version
+      description: Right-click Battery.exe › Properties › Details › Product version.
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Debug log (optional)
+      description: |
+        For sign-in or reading problems: quit Battery, set the environment variable BATTERY_DEBUG=1, start it,
+        wait for the problem, then paste the relevant lines of %AppData%\Battery\web-debug.log. Ids are
+        already blanked; check for anything else personal before pasting.
+      render: text

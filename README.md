@@ -184,4 +184,4 @@ OpenCode readers. It holds HTTP statuses and page paths with ids blanked, never 
 
 ## Licence
 
-MIT. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE). To report a security problem, see [SECURITY.md](SECURITY.md).

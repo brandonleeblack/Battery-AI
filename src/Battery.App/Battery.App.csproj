@@ -14,6 +14,9 @@
     <UseWindowsForms>true</UseWindowsForms>
     <!-- WinForms asks for its own DPI setting; this is a WPF app and the manifest's setting is the right one. -->
     <NoWarn>$(NoWarn);WFAC010</NoWarn>
+    <!-- Keep the WebView2 package's API docs (.xml) out of the published folder. -->
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+    <AllowedReferenceRelatedFileExtensions>.pdb</AllowedReferenceRelatedFileExtensions>
   </PropertyGroup>
 
   <ItemGroup>

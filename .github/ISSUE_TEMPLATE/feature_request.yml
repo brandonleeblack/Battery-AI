@@ -1,0 +1,16 @@
+name: Idea or request
+description: Suggest a change or another service to show.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: What it should do and why it would help you.
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: Where would the numbers come from? (for a new service)
+      description: A page, file or official API that shows the usage. Leave out anything personal.
