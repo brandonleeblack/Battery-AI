@@ -27,6 +27,11 @@ and how old each reading is. Right-click for:
 - **Show** (tick which apps appear; a hidden app is not read, and its items leave the menu), **Bar style**
   (Clean, Glass gel or Cells), **Start with Windows** and **Quit**.
 
+Battery also has an icon in the notification area. Hover it for each app's 5-hour and weekly use,
+left-click it for the details panel, right-click it for the same menu as the strip. Windows puts new
+tray icons in the overflow (the ^ by the clock) at first; drag it onto the taskbar, or turn it on under
+Settings › Personalisation › Taskbar › Other system tray icons, to keep it in view.
+
 Drag the strip sideways to move it along the taskbar; the position is remembered. If a site can't be
 read, the hover says so and Battery tries again every 5 minutes.
 
@@ -47,7 +52,8 @@ This writes two self-contained executables to `dist\`:
 - `dist\Battery.App.exe`: the strip. Run this one.
 - `dist\Battery.StatusLine.exe`: the Claude Code helper. It must stay in the same folder.
 
-Move the whole `dist` folder wherever you like before choosing Start with Windows or Connect Claude
+The icon is drawn by `tools\make-icon.ps1` (writes `src\Battery.App\Battery.ico`); run it again after
+changing the design. Move the whole `dist` folder wherever you like before choosing Start with Windows or Connect Claude
 Code, because both remember the path. Tests: `dotnet test`.
 
 ## Where the numbers come from

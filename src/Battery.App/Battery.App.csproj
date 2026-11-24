@@ -8,7 +8,18 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>Battery.App</RootNamespace>
+    <ApplicationIcon>Battery.ico</ApplicationIcon>
+    <!-- Only for the tray icon (NotifyIcon); everything else is WPF. -->
+    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Keep WPF's names (Application, MessageBox, ...) unambiguous. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <!-- Drawn by tools\make-icon.ps1. -->
+    <EmbeddedResource Include="Battery.ico" LogicalName="Battery.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />

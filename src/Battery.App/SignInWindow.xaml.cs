@@ -14,6 +14,7 @@ public partial class SignInWindow : Window
     public SignInWindow(string serviceName, string startUrl, string? profile)
     {
         InitializeComponent();
+        Icon = TrayIcon.WindowIcon();
         Title = $"Sign in to {serviceName} – Battery";
         Blurb.Text = $"Sign in to {serviceName} here. Battery keeps only the sign-in session, in its own private " +
                      "profile; it never sees your password. Close this window once you are signed in.";

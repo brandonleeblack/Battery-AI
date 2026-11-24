@@ -124,6 +124,9 @@ public partial class App : Application
         _strip.DragFinished += OnDragFinished;
         _strip.DpiChanged += (_, _) => Dispatcher.BeginInvoke(Place);
         _strip.MouseRightButtonUp += (_, args) => { args.Handled = true; ShowMenu(); };
+        _tray = new TrayIcon();
+        _tray.MenuRequested += ShowMenu;
+        _tray.Clicked += TogglePanelFromTray;
         SetUpHover();
 
         RenderNow();   // the last saved readings show immediately
@@ -167,6 +170,7 @@ public partial class App : Application
         foreach (var provider in _providers) provider.Stop();
         _webReader.Dispose();
         _themeWatcher?.Dispose();
+        _tray?.Dispose();
         if (_singleInstance is not null)
         {
             _singleInstance.ReleaseMutex();
@@ -221,6 +225,7 @@ public partial class App : Application
         var apps = StripModel.Build(_store.Current, MergedHints(now), now, _settings.HiddenProviders);
         var theme = Theme.For(_themeWatcher.IsLight);
         _strip.Render(apps, theme, CurrentBarStyle);
+        _tray?.SetTooltip(TrayText.For(apps));
         if (_panel is { IsVisible: true })
         {
             _panel.Render(apps, theme, CurrentBarStyle, now);
@@ -367,8 +372,11 @@ public partial class App : Application
 
         // A menu needs its window in the foreground to close when the user clicks elsewhere. This is
         // the one moment the strip takes focus, and only because the user asked for the menu.
-        SetForegroundWindow(_strip.Handle);
-        menu.PlacementTarget = _strip;
+        if (_strip.IsVisible)
+        {
+            SetForegroundWindow(_strip.Handle);
+            menu.PlacementTarget = _strip;
+        }
         menu.Placement = PlacementMode.MousePoint;
         menu.IsOpen = true;
     }
@@ -418,6 +426,31 @@ public partial class App : Application
         RenderNow();
         // The strip changed width; keep its right edge by the tray once the new size is laid out.
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, Place);
+    }
+
+    TrayIcon? _tray;
+    DispatcherTimer? _trayPanelTimer;
+
+    /// <summary>
+    /// Left-click on the tray icon shows the details panel (or hides it). The pointer is not over the
+    /// strip, so it closes after a few seconds unless the pointer moves onto it.
+    /// </summary>
+    void TogglePanelFromTray()
+    {
+        if (_panel is not null)
+        {
+            HidePanel();
+            return;
+        }
+        ShowPanel();
+        if (_panel is null) return;   // the strip is hidden (full screen) or being dragged
+        _trayPanelTimer ??= new DispatcherTimer(TimeSpan.FromSeconds(6), DispatcherPriority.Normal, (_, _) =>
+        {
+            _trayPanelTimer!.Stop();
+            if (_panel is { IsMouseOver: false }) HidePanel();
+        }, Dispatcher);
+        _trayPanelTimer.Stop();
+        _trayPanelTimer.Start();
     }
 
     SignInWindow? _signInWindow;
