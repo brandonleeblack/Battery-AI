@@ -5,3 +5,6 @@ dist/
 .superpowers/
 *.user
 .claude/settings.local.json
+
+# Planning notes: kept locally, not published
+docs/superpowers/
