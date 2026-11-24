@@ -83,6 +83,9 @@ Other things for developers:
   changing the design.
 - Releases: bump `Version` in `Directory.Build.props`, then push a tag such as `v1.0.1`. The Release
   workflow tests, builds and attaches the zip.
+- `packaging\winget\<version>\` holds the winget manifest for that release. For a new release, copy
+  the folder, change the version, URL and `InstallerSha256` (`Get-FileHash` of the release zip), and
+  check it with `winget validate --manifest <folder>`.
 
 ## Where the numbers come from
 
