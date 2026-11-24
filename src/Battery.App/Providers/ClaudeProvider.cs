@@ -11,7 +11,7 @@ namespace Battery.App.Providers;
 public sealed class ClaudeProvider : IUsageProvider
 {
     public const string NoReadingHint = "Run Claude Code once to start readings";
-    public const string NotConnectedHint = "Right-click › Connect Claude Code";
+    public const string NotConnectedHint = "Right-click › Claude › Connect Claude Code";
     static readonly TimeSpan Debounce = TimeSpan.FromMilliseconds(250);
 
     readonly string _statusFile;

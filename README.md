@@ -14,11 +14,11 @@ has gone by, so you can see at a glance whether you are ahead of the clock.
 - **Empty outline:** never read yet. Hover to see what to do.
 
 Hover over the strip for every window (including OpenCode's monthly one), percent used, time to reset
-and how old each reading is. Right-click for **Refresh now**, **Sign in to Claude…**, **Sign in to OpenCode…**,
-**Connect / Disconnect Claude Code**, **Show** (tick which apps appear; a hidden app is not read, and
-its sign-in items leave the menu), **Bar style** (Clean, Glass gel or Cells), **Start with Windows** and
-**Quit**. Drag the strip sideways to
-move it along the taskbar; the position is remembered.
+and how old each reading is. Right-click for **Refresh now**, **Claude ›** (**Sign in to claude.ai…** and
+**Connect / Disconnect Claude Code…**), **Sign in to OpenCode…**, **Show** (tick which apps appear; a
+hidden app is not read, and its menu items leave the menu), **Bar style** (Clean, Glass gel or Cells),
+**Start with Windows** and **Quit**. Drag the strip sideways to move it along the taskbar; the position
+is remembered. If a site can't be read, the hover says so and Battery tries again every 5 minutes.
 
 The colours follow the Windows mode that colours the taskbar (Settings › Personalisation › Colours ›
 "Choose your default Windows mode"): Graphite when dark, Daylight when light, switching live. The
@@ -45,11 +45,11 @@ Code, because both remember the path. Tests: `dotnet test`.
 All three sources are unofficial and may change without notice. Each provider is isolated, so one
 breaking does not affect the others; it just shows a hint in the hover panel.
 
-### Claude: right-click › Sign in to Claude… (and optionally Connect Claude Code…)
+### Claude: right-click › Claude › Sign in to claude.ai… (and optionally Connect Claude Code…)
 
 Claude has two sources. Battery shows whichever reading is newer.
 
-**claude.ai (recommended).** **Sign in to Claude…** opens claude.ai in a browser window that uses
+**claude.ai (recommended).** **Sign in to claude.ai…** opens claude.ai in a browser window that uses
 Battery's own private profile (`%AppData%\Battery\WebView2`). Sign in there once and close it; email
 sign-in works more reliably there than Google. Every 5 minutes Battery loads Settings › Usage in a
 hidden copy of that browser and reads the 5-hour and weekly figures the page fetches
@@ -64,8 +64,8 @@ Claude Code passes a JSON blob to its status-line command on every update; it in
 **Connect Claude Code…** points the status line in `%USERPROFILE%\.claude\settings.json` at
 `Battery.StatusLine.exe`, after showing exactly what will change. It first backs the file up to
 `settings.json.battery-backup`. If you already had a status-line command, Battery runs it after
-saving its reading, so your own status line keeps working. **Disconnect Claude Code** puts the old
-command back. It first backs the current file up to `settings.json.battery-uninstall-backup`, so the
+saving its reading, so your own status line keeps working. **Disconnect Claude Code…** restores your
+previous status line, or removes it if you had none. It first backs the current file up to `settings.json.battery-uninstall-backup`, so the
 pre-Battery backup is never overwritten. If `%AppData%\Battery` was deleted, the old command is
 recovered from that pre-Battery backup. If you move the app folder, choose **Connect Claude Code…**
 again and the command is repointed.
@@ -132,7 +132,7 @@ OpenCode readers. It holds HTTP statuses and page paths with ids blanked, never 
 
 ## Uninstall
 
-1. Right-click › **Disconnect Claude Code**. This restores your previous status line, from a backup
+1. Right-click › **Claude › Disconnect Claude Code…**. This restores your previous status line, from a backup
    taken first.
 2. Right-click › untick **Start with Windows**. This removes
    `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Battery`.

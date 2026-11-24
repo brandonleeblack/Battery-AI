@@ -11,9 +11,9 @@ namespace Battery.App.Providers;
 /// </summary>
 public sealed class ClaudeWebProvider : IUsageProvider
 {
-    public const string SignInHint = "Right-click › Sign in to Claude";
-    public const string SignInAgainHint = "Sign in again (right-click › Sign in to Claude)";
-    public const string UnreachableHint = "claude.ai page changed or unreachable";
+    public const string SignInHint = "Right-click › Claude › Sign in to claude.ai";
+    public const string SignInAgainHint = "Sign in again (right-click › Claude › Sign in to claude.ai)";
+    public const string UnreachableHint = "Couldn't read claude.ai, trying again in 5 min";
     public const string NoWebViewHint = "Needs the Microsoft Edge WebView2 Runtime";
 
     static readonly TimeSpan PollEvery = TimeSpan.FromMinutes(5);

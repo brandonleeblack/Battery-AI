@@ -137,7 +137,7 @@ public partial class App : Application
             _settings.Save();
         });
         _providers.Add(claudeWeb);
-        _signIns.Add((ProviderIds.Claude, "Sign in to Claude…", () => OpenSignIn("Claude", ClaudeWebUsageParser.UsagePageUrl, claudeWeb)));
+        _signIns.Add((ProviderIds.Claude, "Sign in to claude.ai…", () => OpenSignIn("claude.ai", ClaudeWebUsageParser.UsagePageUrl, claudeWeb)));
     }
 
     void SetHint(IUsageProvider source, string? hint)
@@ -276,14 +276,19 @@ public partial class App : Application
 
         var menu = new ContextMenu();
         menu.Items.Add(Item("Refresh now", RefreshAll));
-        foreach (var (id, label, open) in _signIns)
-            if (IsShown(id)) menu.Items.Add(Item(label, open));
-
+        // Claude's two sources sit together so the claude.ai sign-in and Claude Code are not mistaken for one thing.
         if (IsShown(ProviderIds.Claude))
         {
-            if (ClaudeHookInstaller.IsInstalled()) menu.Items.Add(Item("Disconnect Claude Code", DisconnectClaude));
-            else menu.Items.Add(Item("Connect Claude Code…", ConnectClaude));
+            var claude = new MenuItem { Header = "Claude" };
+            foreach (var (_, label, open) in _signIns.Where(s => s.ProviderId == ProviderIds.Claude))
+                claude.Items.Add(Item(label, open));
+            claude.Items.Add(ClaudeHookInstaller.IsInstalled()
+                ? Item("Disconnect Claude Code…", DisconnectClaude)
+                : Item("Connect Claude Code…", ConnectClaude));
+            menu.Items.Add(claude);
         }
+        foreach (var (id, label, open) in _signIns.Where(s => s.ProviderId != ProviderIds.Claude))
+            if (IsShown(id)) menu.Items.Add(Item(label, open));
 
         menu.Items.Add(AppsMenu());
         menu.Items.Add(BarStyleMenu());
@@ -441,7 +446,8 @@ public partial class App : Application
     {
         const string title = "Disconnect Claude Code";
         var message =
-            "This puts your previous status line back in:\n" + ClaudeHookInstaller.SettingsPath + "\n\n" +
+            "This restores your previous status line, or removes it if you had none, in:\n" +
+            ClaudeHookInstaller.SettingsPath + "\n\n" +
             "A backup is made first at:\n" + ClaudeHookInstaller.UninstallBackupPath + "\n\nGo ahead?";
         if (MessageBox.Show(message, title, MessageBoxButton.OKCancel, MessageBoxImage.Question,
                 MessageBoxResult.Cancel) != MessageBoxResult.OK)

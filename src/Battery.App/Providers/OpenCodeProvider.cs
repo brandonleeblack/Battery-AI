@@ -13,7 +13,7 @@ public sealed class OpenCodeProvider : IUsageProvider
 {
     public const string SignInHint = "Right-click › Sign in to OpenCode";
     public const string SignInAgainHint = "Sign in again (right-click › Sign in to OpenCode)";
-    public const string UnreachableHint = "OpenCode page changed or unreachable";
+    public const string UnreachableHint = "Couldn't read OpenCode, trying again in 5 min";
     public const string NoWebViewHint = "Needs the Microsoft Edge WebView2 Runtime";
 
     static readonly TimeSpan PollEvery = TimeSpan.FromMinutes(5);
