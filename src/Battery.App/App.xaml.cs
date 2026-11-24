@@ -23,7 +23,7 @@ public partial class App : Application
     Mutex? _singleInstance;
     Settings _settings = new();
     StripWindow _strip = null!;
-    HoverPanel _panel = null!;
+    HoverPanel? _panel;   // a fresh one each time it shows; null while hidden
     SystemThemeWatcher _themeWatcher = null!;
     DispatcherTimer _placeTimer = null!;
     DispatcherTimer _renderTimer = null!;
@@ -75,7 +75,6 @@ public partial class App : Application
         _strip.DragFinished += OnDragFinished;
         _strip.DpiChanged += (_, _) => Dispatcher.BeginInvoke(Place);
         _strip.MouseRightButtonUp += (_, args) => { args.Handled = true; ShowMenu(); };
-        _panel = new HoverPanel();
         SetUpHover();
 
         RenderNow();   // the last saved readings show immediately
@@ -168,7 +167,7 @@ public partial class App : Application
         var apps = StripModel.Build(_store.Current, MergedHints(now), now);
         var theme = Theme.For(_themeWatcher.IsLight);
         _strip.Render(apps, theme);
-        if (_panel.IsVisible)
+        if (_panel is { IsVisible: true })
         {
             _panel.Render(apps, theme, now);
             Dispatcher.BeginInvoke(DispatcherPriority.Loaded, PlacePanel);   // its height may have changed
@@ -185,7 +184,7 @@ public partial class App : Application
         if (Taskbar.IsFullScreenAppActive(_strip.Handle) || Taskbar.IsAutoHiddenNow())
         {
             if (_strip.IsVisible) _strip.Hide();
-            _panel.Hide();
+            HidePanel();
             return;
         }
         if (!_strip.IsVisible) _strip.Show();
@@ -220,20 +219,24 @@ public partial class App : Application
         _hoverShow = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher) { Interval = HoverShowAfter };
         _hoverShow.Tick += (_, _) => { _hoverShow.Stop(); ShowPanel(); };
         _hoverHide = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher) { Interval = HoverHideAfter };
-        _hoverHide.Tick += (_, _) => { _hoverHide.Stop(); _panel.Hide(); };
+        _hoverHide.Tick += (_, _) => { _hoverHide.Stop(); HidePanel(); };
 
-        _strip.MouseEnter += (_, _) => { _hoverHide.Stop(); if (!_panel.IsVisible) _hoverShow.Start(); };
-        _strip.MouseLeave += (_, _) => { _hoverShow.Stop(); if (_panel.IsVisible) _hoverHide.Start(); };
-        _panel.MouseEnter += (_, _) => _hoverHide.Stop();
-        _panel.MouseLeave += (_, _) => _hoverHide.Start();
+        _strip.MouseEnter += (_, _) => { _hoverHide.Stop(); if (_panel is null) _hoverShow.Start(); };
+        _strip.MouseLeave += (_, _) => { _hoverShow.Stop(); if (_panel is not null) _hoverHide.Start(); };
         // A press starts a drag or opens the menu; neither is a hover.
-        _strip.PreviewMouseDown += (_, _) => { _hoverShow.Stop(); _panel.Hide(); };
+        _strip.PreviewMouseDown += (_, _) => { _hoverShow.Stop(); HidePanel(); };
     }
 
     void ShowPanel()
     {
         if (_strip.IsDragging || !_strip.IsVisible) return;
         var now = DateTimeOffset.Now;
+        // A new window every time: a transparent window that was hidden can come back blank after another
+        // window (the sign-in browser) has used the graphics device, and a fresh one always draws.
+        HidePanel();
+        _panel = new HoverPanel();
+        _panel.MouseEnter += (_, _) => _hoverHide.Stop();
+        _panel.MouseLeave += (_, _) => _hoverHide.Start();
         _panel.Render(StripModel.Build(_store.Current, MergedHints(now), now), Theme.For(_themeWatcher.IsLight), now);
         _panel.Opacity = 0;   // shown first so it has a size, then moved, then revealed
         _panel.Show();
@@ -242,10 +245,16 @@ public partial class App : Application
         _panel.Opacity = 1;
     }
 
+    void HidePanel()
+    {
+        _panel?.Close();
+        _panel = null;
+    }
+
     /// <summary>Above the strip, right edges aligned, 10 px gap, kept on the primary screen.</summary>
     void PlacePanel()
     {
-        if (!_panel.IsVisible) return;
+        if (_panel is null || !_panel.IsVisible) return;
         var strip = _strip.PixelRect;
         var panel = _panel.PixelRect;
         var screen = Taskbar.PrimaryScreen();
@@ -259,7 +268,7 @@ public partial class App : Application
     void ShowMenu()
     {
         _hoverShow.Stop();
-        _panel.Hide();
+        HidePanel();
 
         var menu = new ContextMenu();
         menu.Items.Add(Item("Refresh now", RefreshAll));
