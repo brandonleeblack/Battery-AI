@@ -26,4 +26,17 @@ public class HintMergeTests
         Assert.Equal("only", HintMerge.For(new[] { (true, (string?)"only") }));
         Assert.Null(HintMerge.For(new[] { (true, (string?)null) }));
     }
+
+    [Fact]
+    public void Stale_reading_shows_the_advice_even_though_another_source_once_worked() =>
+        // The status line gave a reading an hour ago; claude.ai needs a sign-in. The advice is worth showing.
+        Assert.Equal("Sign in", HintMerge.For(new[] { (true, (string?)"Sign in"), (true, (string?)null) }, readingIsFresh: false));
+
+    [Fact]
+    public void Fresh_reading_still_hides_the_advice() =>
+        Assert.Null(HintMerge.For(new[] { (true, (string?)"Sign in"), (true, (string?)null) }, readingIsFresh: true));
+
+    [Fact]
+    public void Stale_reading_with_no_advice_anywhere_gives_no_hint() =>
+        Assert.Null(HintMerge.For(new[] { (true, (string?)null), (true, (string?)null) }, readingIsFresh: false));
 }

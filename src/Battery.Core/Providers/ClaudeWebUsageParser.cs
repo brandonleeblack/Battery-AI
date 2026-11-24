@@ -86,5 +86,6 @@ public static class ClaudeWebUsageParser
         && u.Scheme is "http" or "https"
         && (!u.Host.EndsWith("claude.ai", StringComparison.OrdinalIgnoreCase)
             || u.AbsolutePath.StartsWith("/login", StringComparison.OrdinalIgnoreCase)
+            || u.AbsolutePath.StartsWith("/logout", StringComparison.OrdinalIgnoreCase)   // signed out: /logout, then /login
             || u.AbsolutePath.StartsWith("/magic-link", StringComparison.OrdinalIgnoreCase));
 }

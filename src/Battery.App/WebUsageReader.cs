@@ -155,9 +155,20 @@ public sealed class WebUsageReader : IDisposable
             // Otherwise the page is loading; its usage request arrives through OnResponse.
         }
 
+        void OnSourceChanged(object? sender, CoreWebView2SourceChangedEventArgs e)
+        {
+            // Single-page sites move to their sign-in page from script, without a new navigation.
+            if (ourNavigation is not null && isSignInPage(core.Source))
+            {
+                Debug(source, $"source-changed to sign-in source={SafePath(core.Source)}");
+                done.TrySetResult((401, null));
+            }
+        }
+
         core.NavigationStarting += OnStarting;
         core.WebResourceResponseReceived += OnResponse;
         core.NavigationCompleted += OnCompleted;
+        core.SourceChanged += OnSourceChanged;
         try
         {
             core.Navigate(pageUrl);
@@ -169,6 +180,7 @@ public sealed class WebUsageReader : IDisposable
             core.NavigationStarting -= OnStarting;
             core.WebResourceResponseReceived -= OnResponse;
             core.NavigationCompleted -= OnCompleted;
+            core.SourceChanged -= OnSourceChanged;
             // Leave the page so its scripts are not left running in the background between reads.
             try { core.Navigate("about:blank"); } catch { }
         }

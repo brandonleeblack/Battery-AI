@@ -100,6 +100,7 @@ public class ClaudeWebUsageParserTests
     [Theory]
     [InlineData("https://claude.ai/login", true)]
     [InlineData("https://claude.ai/login?returnTo=%2Fsettings%2Fusage", true)]
+    [InlineData("https://claude.ai/logout", true)]   // seen for real: signed out, the usage page goes here first
     [InlineData("https://accounts.google.com/o/oauth2/auth", true)]
     [InlineData("https://claude.ai/settings/usage", false)]
     [InlineData("https://claude.ai/new", false)]

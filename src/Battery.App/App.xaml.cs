@@ -31,7 +31,6 @@ public partial class App : Application
     DispatcherTimer _hoverHide = null!;
     ReadingStore _store = null!;
     readonly List<IUsageProvider> _providers = new();
-    readonly Dictionary<string, string> _hints = new();   // per app, merged from its sources; UI thread only
     readonly Dictionary<IUsageProvider, (bool Reported, string? Hint)> _sourceHints = new();   // UI thread only
     readonly WebUsageReader _webReader = new();
 
@@ -140,21 +139,33 @@ public partial class App : Application
 
     void SetHint(IUsageProvider source, string? hint)
     {
+        if (_sourceHints.TryGetValue(source, out var current) && current == (true, hint)) return;
         _sourceHints[source] = (true, hint);
-        var id = source.Id;
-        var merged = HintMerge.For(_providers.Where(p => p.Id == id)
-            .Select(p => _sourceHints.TryGetValue(p, out var h) ? h : (false, null)));
-
-        _hints.TryGetValue(id, out var current);
-        if (current == merged) return;
-        if (merged is null) _hints.Remove(id); else _hints[id] = merged;
         RenderNow();
+    }
+
+    /// <summary>
+    /// One hint per app, merged from its sources. Worked out at each render because whether the app's
+    /// reading is fresh changes with time, and a stale reading lets the other source's advice through.
+    /// </summary>
+    Dictionary<string, string> MergedHints(DateTimeOffset now)
+    {
+        var merged = new Dictionary<string, string>();
+        var readings = _store.Current;
+        foreach (var id in _providers.Select(p => p.Id).Distinct())
+        {
+            var fresh = !readings.TryGetValue(id, out var r) || now - r.ReadAt <= StripModel.StaleAfter;
+            var hint = HintMerge.For(_providers.Where(p => p.Id == id)
+                .Select(p => _sourceHints.TryGetValue(p, out var h) ? h : (false, null)), fresh);
+            if (hint is not null) merged[id] = hint;
+        }
+        return merged;
     }
 
     void RenderNow()
     {
         var now = DateTimeOffset.Now;
-        var apps = StripModel.Build(_store.Current, _hints, now);
+        var apps = StripModel.Build(_store.Current, MergedHints(now), now);
         var theme = Theme.For(_themeWatcher.IsLight);
         _strip.Render(apps, theme);
         if (_panel.IsVisible)
@@ -223,7 +234,7 @@ public partial class App : Application
     {
         if (_strip.IsDragging || !_strip.IsVisible) return;
         var now = DateTimeOffset.Now;
-        _panel.Render(StripModel.Build(_store.Current, _hints, now), Theme.For(_themeWatcher.IsLight), now);
+        _panel.Render(StripModel.Build(_store.Current, MergedHints(now), now), Theme.For(_themeWatcher.IsLight), now);
         _panel.Opacity = 0;   // shown first so it has a size, then moved, then revealed
         _panel.Show();
         _panel.UpdateLayout();
