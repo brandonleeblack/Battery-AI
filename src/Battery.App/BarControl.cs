@@ -57,10 +57,8 @@ public sealed class BarControl : FrameworkElement
             dc.DrawRoundedRectangle(Paint.FromHex(_theme.FillFor(_bar.State)), null, new Rect(0, 0, fillWidth, h), r, r);
         }
 
-        // A window whose reset has passed comes through as stale with fill and clock both zero; when its
-        // next window started is unknown, so no clock line is drawn for it.
-        var resetPassed = _bar.Stale && _bar.FillPercent == 0 && _bar.ClockPercent == 0;
-        if (!resetPassed)
+        // After a reset with no new reading, when the next window started is unknown: no clock line.
+        if (!_bar.ResetPassed)
         {
             var x = Math.Min(w * Math.Clamp(_bar.ClockPercent, 0, 100) / 100, w - ClockWidth);
             // Land on whole device pixels so the 2 px line stays crisp instead of blurring to 3.

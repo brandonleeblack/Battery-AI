@@ -98,8 +98,7 @@ public partial class HoverPanel : Window
             return row;
         }
 
-        var resetPassed = bar.ResetsAt is { } r && r <= now;
-        if (resetPassed)
+        if (bar.ResetPassed)
         {
             // The window has rolled over since the last reading; the old figure no longer applies.
             row.Children.Add(new TextBlock { Text = "window reset, no new reading yet", Foreground = secondary });
@@ -116,7 +115,8 @@ public partial class HoverPanel : Window
         });
         row.Children.Add(new TextBlock
         {
-            Text = bar.ResetsAt is { } resetsAt ? "resets " + HoverFormat.FormatReset(resetsAt - now) : "",
+            Text = bar.NotStarted ? "not started"
+                : bar.ResetsAt is { } resetsAt ? "resets " + HoverFormat.FormatReset(resetsAt - now) : "",
             Foreground = secondary,
             Margin = new Thickness(CellGap, 0, 0, 0),
         });

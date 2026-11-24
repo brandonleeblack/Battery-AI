@@ -98,7 +98,9 @@ public class StripModelTests
         Assert.True(claude.FiveHour.Stale);
         Assert.False(claude.FiveHour.Missing);
         Assert.Equal(BarState.Normal, claude.FiveHour.State);
+        Assert.True(claude.FiveHour.ResetPassed);
         Assert.False(claude.Weekly.Stale);   // the other window is unaffected
+        Assert.False(claude.Weekly.ResetPassed);
     }
 
     [Fact]
@@ -140,6 +142,21 @@ public class StripModelTests
 
         Assert.Equal(100, claude.FiveHour.FillPercent);
         Assert.Equal(0, claude.Weekly.FillPercent);
+    }
+
+    [Fact]
+    public void Window_not_started_has_no_reset_time_and_no_elapsed_clock()
+    {
+        var idle = new UsageWindow(WindowKind.FiveHour, 0, Now.AddHours(4), TimeSpan.FromHours(5)) { NotStarted = true };
+        var readings = One(ProviderIds.OpenCode, Now.AddMinutes(-60), idle, Week(10, Now.AddDays(3)));
+
+        var five = StripModel.Build(readings, NoHints, Now)[2].FiveHour;
+
+        Assert.Null(five.ResetsAt);
+        Assert.True(five.NotStarted);
+        Assert.Equal(0, five.ClockPercent);
+        Assert.Equal(0, five.FillPercent);
+        Assert.False(five.Missing);
     }
 
     [Fact]

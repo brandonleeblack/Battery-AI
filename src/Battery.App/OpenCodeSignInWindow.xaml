@@ -1,0 +1,15 @@
+<Window x:Class="Battery.App.OpenCodeSignInWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="Sign in to OpenCode – Battery"
+        Width="1000" Height="760"
+        WindowStartupLocation="CenterScreen">
+    <DockPanel>
+        <TextBlock DockPanel.Dock="Top" Margin="12,8" TextWrapping="Wrap">
+            Sign in to OpenCode here. Battery keeps only the sign-in session, in its own private profile;
+            it never sees your password. Close this window when you see your console.
+        </TextBlock>
+        <wv2:WebView2 x:Name="Web" />
+    </DockPanel>
+</Window>

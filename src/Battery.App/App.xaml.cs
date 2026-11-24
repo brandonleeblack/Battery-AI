@@ -76,6 +76,9 @@ public partial class App : Application
 
         _providers.Add(new ClaudeProvider());
         _providers.Add(new CodexProvider());
+        var openCode = new OpenCodeProvider(() => _store.Current.ContainsKey(ProviderIds.OpenCode));
+        _providers.Add(openCode);
+        _signInToOpenCode = () => OpenSignIn(openCode);
         foreach (var provider in _providers)
         {
             var id = provider.Id;
@@ -241,6 +244,25 @@ public partial class App : Application
         menu.PlacementTarget = _strip;
         menu.Placement = PlacementMode.MousePoint;
         menu.IsOpen = true;
+    }
+
+    OpenCodeSignInWindow? _signInWindow;
+
+    void OpenSignIn(OpenCodeProvider provider)
+    {
+        if (_signInWindow is not null)
+        {
+            _signInWindow.Activate();
+            return;
+        }
+        _signInWindow = new OpenCodeSignInWindow();
+        _signInWindow.Closed += (_, _) =>
+        {
+            _signInWindow = null;
+            _ = provider.RefreshAsync();
+        };
+        _signInWindow.Show();
+        _signInWindow.Activate();
     }
 
     static MenuItem Item(string header, Action onClick)

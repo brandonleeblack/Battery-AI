@@ -33,6 +33,15 @@ public sealed class ReadingStoreTests : IDisposable
     }
 
     [Fact]
+    public void Not_started_flag_round_trips()
+    {
+        var idle = new UsageWindow(WindowKind.FiveHour, 0, Now.AddHours(5), TimeSpan.FromHours(5)) { NotStarted = true };
+        new ReadingStore(StorePath).Put(new ProviderReading(ProviderIds.OpenCode, new[] { idle }, Now));
+
+        Assert.True(new ReadingStore(StorePath).Current[ProviderIds.OpenCode].Windows[0].NotStarted);
+    }
+
+    [Fact]
     public void Corrupt_file_loads_empty()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(StorePath)!);
