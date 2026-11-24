@@ -41,8 +41,8 @@ static class Taskbar
             return false;
 
         if (!WindowStyles.TryGetRect(fg, out var r)) return false;
-        var screen = PrimaryScreen();
-        return r.Left <= screen.Left && r.Top <= screen.Top && r.Right >= screen.Right && r.Bottom >= screen.Bottom;
+        var style = GetWindowLongPtr(fg, GWL_STYLE).ToInt64();
+        return FullScreenRule.IsFullScreen(r, PrimaryScreen(), IsZoomed(fg), (style & WS_CAPTION) == WS_CAPTION);
     }
 
     /// <summary>True when the taskbar is set to auto-hide and is currently slid off the screen.</summary>
@@ -60,6 +60,15 @@ static class Taskbar
     }
 
     const int SM_CXSCREEN = 0, SM_CYSCREEN = 1;
+    const int GWL_STYLE = -16;
+    const long WS_CAPTION = 0x00C00000;
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int index);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    static extern bool IsZoomed(IntPtr hWnd);
     const uint ABM_GETSTATE = 4;
     const long ABS_AUTOHIDE = 1;
 

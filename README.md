@@ -51,7 +51,10 @@ Claude Code passes a JSON blob to its status-line command on every update; it in
 `Battery.StatusLine.exe`, after showing exactly what will change. It first backs the file up to
 `settings.json.battery-backup`. If you already had a status-line command, Battery runs it after
 saving its reading, so your own status line keeps working. **Disconnect Claude Code** puts the old
-command back.
+command back. It first backs the current file up to `settings.json.battery-uninstall-backup`, so the
+pre-Battery backup is never overwritten. If `%AppData%\Battery` was deleted, the old command is
+recovered from that pre-Battery backup. If you move the app folder, choose **Connect Claude Code…**
+again and the command is repointed.
 
 Limits:
 

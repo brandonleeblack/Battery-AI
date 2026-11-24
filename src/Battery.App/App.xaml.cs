@@ -1,3 +1,4 @@
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -38,6 +39,12 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        // Last resort: a bug in one handler must not take the strip down. Logged with no usage data.
+        DispatcherUnhandledException += (_, args) =>
+        {
+            LogError(args.Exception);
+            args.Handled = true;
+        };
 
         _singleInstance = new Mutex(initiallyOwned: true, @"Local\Battery.SingleInstance", out var isFirst);
         if (!isFirst)
@@ -325,7 +332,7 @@ public partial class App : Application
         const string title = "Disconnect Claude Code";
         var message =
             "This puts your previous status line back in:\n" + ClaudeHookInstaller.SettingsPath + "\n\n" +
-            "A backup is made first at:\n" + ClaudeHookInstaller.BackupPath + "\n\nGo ahead?";
+            "A backup is made first at:\n" + ClaudeHookInstaller.UninstallBackupPath + "\n\nGo ahead?";
         if (MessageBox.Show(message, title, MessageBoxButton.OKCancel, MessageBoxImage.Question,
                 MessageBoxResult.Cancel) != MessageBoxResult.OK)
             return;
@@ -345,4 +352,15 @@ public partial class App : Application
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    static void LogError(Exception e)
+    {
+        try
+        {
+            Directory.CreateDirectory(AppPaths.DataDir);
+            File.AppendAllText(Path.Combine(AppPaths.DataDir, "error.log"),
+                $"{DateTimeOffset.Now:O} {e.GetType().FullName}: {e.Message}\n{e.StackTrace}\n");
+        }
+        catch { }
+    }
 }

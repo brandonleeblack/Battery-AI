@@ -47,9 +47,28 @@ public static class ClaudeSettingsEditor
         {
             return IsOurs(CurrentCommand(ParseRoot(settingsJson)));
         }
-        catch (ClaudeSettingsFormatException)
+        catch (Exception e) when (e is ClaudeSettingsFormatException or ArgumentException or InvalidOperationException)
         {
-            return false;
+            return false;   // unreadable, or oddities such as duplicate keys
+        }
+    }
+
+    /// <summary>
+    /// The status-line command to put back on Disconnect: the recorded chain command, or failing that
+    /// the command in the pre-Battery backup of settings.json. Never Battery's own shim.
+    /// </summary>
+    public static string? PreviousCommand(string? chainText, string? backupJson)
+    {
+        var chained = chainText?.Trim().TrimStart('﻿');
+        if (!string.IsNullOrWhiteSpace(chained)) return IsOurs(chained) ? null : chained;
+        try
+        {
+            var fromBackup = CurrentCommand(ParseRoot(backupJson));
+            return string.IsNullOrWhiteSpace(fromBackup) || IsOurs(fromBackup) ? null : fromBackup;
+        }
+        catch (Exception e) when (e is ClaudeSettingsFormatException or ArgumentException or InvalidOperationException)
+        {
+            return null;
         }
     }
 
@@ -58,7 +77,13 @@ public static class ClaudeSettingsEditor
     {
         var root = ParseRoot(settingsJson);
         var current = CurrentCommand(root);
-        if (IsOurs(current)) return new Result(settingsJson ?? "", false, null);
+        if (current == shimCommand) return new Result(settingsJson ?? "", false, null);
+        if (IsOurs(current))
+        {
+            // Ours at an old path (the app folder moved): repoint it, and never chain to ourselves.
+            ((JsonObject)root["statusLine"]!)["command"] = shimCommand;
+            return new Result(root.ToJsonString(Write), true, null);
+        }
 
         if (root["statusLine"] is JsonObject statusLine)
         {

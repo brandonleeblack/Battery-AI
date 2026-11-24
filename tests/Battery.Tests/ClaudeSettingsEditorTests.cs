@@ -67,6 +67,53 @@ public class ClaudeSettingsEditorTests
     }
 
     [Fact]
+    public void Install_when_ours_at_an_old_path_moves_it_to_the_new_path_without_recording_it_as_previous()
+    {
+        var atOldPath = ClaudeSettingsEditor.Install(Existing, "C:/Old/Battery.StatusLine.exe").Json;
+
+        var moved = ClaudeSettingsEditor.Install(atOldPath, Shim);
+
+        Assert.True(moved.Changed);
+        Assert.Null(moved.PreviousCommand);
+        Assert.Equal(Shim, Parse(moved.Json).GetProperty("statusLine").GetProperty("command").GetString());
+    }
+
+    [Fact]
+    public void Previous_command_comes_from_the_chain_file_first()
+    {
+        var backup = Existing;
+
+        Assert.Equal("from-chain", ClaudeSettingsEditor.PreviousCommand("  from-chain\n", backup));
+    }
+
+    [Fact]
+    public void Previous_command_falls_back_to_the_pre_battery_backup_when_the_chain_file_is_gone()
+    {
+        Assert.Equal(ExistingCommand, ClaudeSettingsEditor.PreviousCommand(null, Existing));
+        Assert.Equal(ExistingCommand, ClaudeSettingsEditor.PreviousCommand("   ", Existing));
+    }
+
+    [Fact]
+    public void Previous_command_is_never_our_own_shim()
+    {
+        var oursInBackup = ClaudeSettingsEditor.Install(Existing, Shim).Json;
+
+        Assert.Null(ClaudeSettingsEditor.PreviousCommand(Shim, null));
+        Assert.Null(ClaudeSettingsEditor.PreviousCommand(null, oursInBackup));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("{{{")]
+    [InlineData("{}")]
+    public void Previous_command_is_null_when_nothing_usable_is_left(string? backup) =>
+        Assert.Null(ClaudeSettingsEditor.PreviousCommand(null, backup));
+
+    [Fact]
+    public void Duplicate_keys_do_not_throw_out_of_IsInstalled() =>
+        Assert.False(ClaudeSettingsEditor.IsInstalled("{\"statusLine\":{\"command\":\"a\",\"command\":\"b\"}}"));
+
+    [Fact]
     public void IsInstalled_reflects_whose_command_is_set()
     {
         Assert.False(ClaudeSettingsEditor.IsInstalled(null));

@@ -16,7 +16,11 @@ public static class ClaudeHookInstaller
     public static string SettingsPath { get; } =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", "settings.json");
 
+    /// <summary>settings.json as it was before Battery's status line went in. Disconnect falls back to it.</summary>
     public static string BackupPath => SettingsPath + ".battery-backup";
+
+    /// <summary>settings.json as it was just before Disconnect changed it.</summary>
+    public static string UninstallBackupPath => SettingsPath + ".battery-uninstall-backup";
 
     /// <summary>The shim sits beside the running app.</summary>
     public static string ShimPath => Path.Combine(AppContext.BaseDirectory, "Battery.StatusLine.exe");
@@ -29,9 +33,9 @@ public static class ClaudeHookInstaller
         {
             return File.Exists(SettingsPath) && ClaudeSettingsEditor.IsInstalled(File.ReadAllText(SettingsPath));
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch
         {
-            return false;
+            return false;   // the menu must open whatever state the file is in
         }
     }
 
@@ -53,15 +57,23 @@ public static class ClaudeHookInstaller
     public static void Install()
     {
         var existing = File.Exists(SettingsPath) ? File.ReadAllText(SettingsPath) : null;
+        var wasOurs = ClaudeSettingsEditor.IsInstalled(existing);
         var result = ClaudeSettingsEditor.Install(existing, ClaudeSettingsEditor.CommandFor(ShimPath));
         if (!result.Changed) return;
+
+        if (wasOurs)
+        {
+            // Only repointing our own command at a new path: the chain file and the pre-Battery backup stay as they are.
+            WriteSettings(existing, result.Json, UninstallBackupPath);
+            return;
+        }
 
         // Record what to chain to before the switch, so the shim never runs without it.
         Directory.CreateDirectory(AppPaths.DataDir);
         if (string.IsNullOrWhiteSpace(result.PreviousCommand)) File.Delete(AppPaths.StatusLineChainFile);
         else File.WriteAllText(AppPaths.StatusLineChainFile, result.PreviousCommand, Utf8NoBom);
 
-        WriteSettings(existing, result.Json);
+        WriteSettings(existing, result.Json, BackupPath);
     }
 
     /// <summary>Restores the previous status-line command (or removes ours when there was none).</summary>
@@ -69,21 +81,23 @@ public static class ClaudeHookInstaller
     {
         if (!File.Exists(SettingsPath)) return;
         var existing = File.ReadAllText(SettingsPath);
-        var previous = File.Exists(AppPaths.StatusLineChainFile)
-            ? File.ReadAllText(AppPaths.StatusLineChainFile).Trim()
-            : null;
+        // The chain file first; if %AppData%\Battery was deleted, the pre-Battery backup still knows.
+        var previous = ClaudeSettingsEditor.PreviousCommand(
+            File.Exists(AppPaths.StatusLineChainFile) ? File.ReadAllText(AppPaths.StatusLineChainFile) : null,
+            File.Exists(BackupPath) ? File.ReadAllText(BackupPath) : null);
 
         var result = ClaudeSettingsEditor.Uninstall(existing, previous);
         if (!result.Changed) return;
 
-        WriteSettings(existing, result.Json);
+        // A separate backup, so the pre-Battery one is never overwritten with Battery's own version.
+        WriteSettings(existing, result.Json, UninstallBackupPath);
         File.Delete(AppPaths.StatusLineChainFile);
     }
 
-    static void WriteSettings(string? existing, string updated)
+    static void WriteSettings(string? existing, string updated, string backupPath)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
-        if (existing is not null) File.Copy(SettingsPath, BackupPath, overwrite: true);
+        if (existing is not null) File.Copy(SettingsPath, backupPath, overwrite: true);
 
         var tmp = SettingsPath + ".battery-tmp";
         File.WriteAllText(tmp, updated, Utf8NoBom);
