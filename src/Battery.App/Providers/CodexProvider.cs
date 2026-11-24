@@ -20,6 +20,9 @@ public sealed class CodexProvider : IUsageProvider
             ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".codex", "sessions");
     }
 
+    /// <summary>The folder Codex writes its session files to.</summary>
+    public string SessionsDir => _sessionsDir;
+
     public string Id => ProviderIds.Codex;
     public event Action<ProviderReading>? ReadingAvailable;
     public event Action<string?>? HintChanged;

@@ -33,13 +33,58 @@ public partial class App : Application
     readonly List<IUsageProvider> _providers = new();
     readonly Dictionary<IUsageProvider, (bool Reported, string? Hint)> _sourceHints = new();   // UI thread only
     readonly WebUsageReader _webReader = new();
-
-    /// <summary>"Sign in to …" menu items, one per web source, in menu order.</summary>
-    readonly List<(string ProviderId, string Label, Action Open)> _signIns = new();
+    WebSignInProvider _claudeWeb = null!;
+    WebSignInProvider _openCode = null!;
+    CodexProvider _codex = null!;
+    ClaudeProvider _claudeCode = null!;
 
     BarStyle CurrentBarStyle => BarStyles.Parse(_settings.BarStyle);
 
     bool IsShown(string providerId) => ShownApps.Visible(_settings.HiddenProviders).Any(a => a.Id == providerId);
+
+    bool IsConnected(string providerId) => _settings.ConnectedApps?.Contains(providerId) == true;
+
+    /// <summary>
+    /// A source is read only while its app is shown and connected. The Claude Code status line has its
+    /// own on/off (the status-line setting itself), so it runs whenever Claude is shown.
+    /// </summary>
+    bool ShouldRun(IUsageProvider p) => IsShown(p.Id) && (p == _claudeCode || IsConnected(p.Id));
+
+    /// <summary>Starts or stops a source to match the settings; a stopped one gets its "connect" hint.</summary>
+    void ApplyRunState(IUsageProvider p)
+    {
+        if (ShouldRun(p))
+        {
+            p.Start();
+            return;
+        }
+        p.Stop();
+        if (p != _claudeCode)
+            SetHint(p, AppConnections.For(p.Id).HintWhileDisconnected(_settings.LapsedApps.Contains(p.Id)));
+    }
+
+    void SetConnected(string providerId, bool connected, bool lapsed = false)
+    {
+        _settings.ConnectedApps = AppConnections.WithConnected(_settings.ConnectedApps ?? new(), providerId, connected).ToList();
+        _settings.LapsedApps = AppConnections.WithConnected(_settings.LapsedApps, providerId, lapsed).ToList();
+        _settings.Save();
+    }
+
+    /// <summary>
+    /// First start of the version that tracks connections: carry over what was working. claude.ai was
+    /// signed in if it ever gave a reading; Codex was being read if it has a reading. OpenCode moved to
+    /// its own browser profile, so its old sign-in does not carry over: it shows as signed out.
+    /// </summary>
+    void MigrateConnections()
+    {
+        if (_settings.ConnectedApps is not null) return;
+        var connected = new List<string>();
+        if (_settings.ClaudeWebSeen) connected.Add(ProviderIds.Claude);
+        if (_store.Current.ContainsKey(ProviderIds.Codex)) connected.Add(ProviderIds.Codex);
+        _settings.ConnectedApps = connected;
+        if (_store.Current.ContainsKey(ProviderIds.OpenCode)) _settings.LapsedApps.Add(ProviderIds.OpenCode);
+        _settings.Save();
+    }
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -85,19 +130,27 @@ public partial class App : Application
         _strip.Show();
         Place();
 
-        // Order matters twice: for an app with several sources, the first one's hint is the advice shown.
-        AddWebSources();
-        _providers.Add(new ClaudeProvider());
-        _providers.Add(new CodexProvider());
-        var openCode = new OpenCodeProvider(_webReader, () => _store.Current.ContainsKey(ProviderIds.OpenCode));
-        _providers.Add(openCode);
-        _signIns.Add((ProviderIds.OpenCode, "Sign in to OpenCode…", () => OpenSignIn("OpenCode", OpenCodeUsageParser.ConsoleUrl, openCode)));
+        MigrateConnections();
+
+        // Order matters: for Claude, the first source's hint is the advice shown. claude.ai comes first
+        // because it is account-wide, covering Desktop and web use too.
+        _claudeWeb = WebSignInProvider.Claude(_webReader, () => IsConnected(ProviderIds.Claude));
+        _claudeCode = new ClaudeProvider();
+        _codex = new CodexProvider();
+        _openCode = WebSignInProvider.OpenCode(_webReader, () => IsConnected(ProviderIds.OpenCode));
+        _providers.AddRange(new IUsageProvider[] { _claudeWeb, _claudeCode, _codex, _openCode });
+
+        foreach (var web in new[] { _claudeWeb, _openCode })
+        {
+            var source = web;
+            source.SignedInChanged += signedIn => Dispatcher.BeginInvoke(() => OnSignedInChanged(source, signedIn));
+        }
         foreach (var provider in _providers)
         {
             var source = provider;
             provider.ReadingAvailable += reading => _store.Put(reading);
             provider.HintChanged += hint => Dispatcher.BeginInvoke(() => SetHint(source, hint));
-            if (IsShown(provider.Id)) provider.Start();   // a hidden app is not read at all
+            ApplyRunState(provider);   // hidden or not-connected apps are not read at all
         }
 
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
@@ -124,20 +177,17 @@ public partial class App : Application
 
     void OnDisplaySettingsChanged(object? sender, EventArgs e) => Dispatcher.BeginInvoke(Place);
 
-    /// <summary>Sources added before the file and folder sources (filled in by the Claude web source).</summary>
-    void AddWebSources()
+    /// <summary>
+    /// A read confirmed the sign-in (connect, start polling) or found Battery signed out. Signed out while
+    /// connected means the site ended the session: stop reading and say "Signed out" until signed in again.
+    /// </summary>
+    void OnSignedInChanged(WebSignInProvider source, bool signedIn)
     {
-        // claude.ai first: account-wide, so it covers Desktop and web use. Its sign-in advice is the
-        // hint shown while neither Claude source has a reading.
-        var claudeWeb = new ClaudeWebProvider(_webReader, () => _settings.ClaudeWebSeen);
-        claudeWeb.ReadingAvailable += _ => Dispatcher.BeginInvoke(() =>
-        {
-            if (_settings.ClaudeWebSeen) return;
-            _settings.ClaudeWebSeen = true;
-            _settings.Save();
-        });
-        _providers.Add(claudeWeb);
-        _signIns.Add((ProviderIds.Claude, "Sign in to claude.ai…", () => OpenSignIn("claude.ai", ClaudeWebUsageParser.UsagePageUrl, claudeWeb)));
+        // A read already under way when the user chose Disconnect must not connect it again.
+        if (_disconnecting.Contains(source.Id)) return;
+        if (signedIn == IsConnected(source.Id)) return;
+        SetConnected(source.Id, signedIn, lapsed: !signedIn);
+        ApplyRunState(source);
     }
 
     void SetHint(IUsageProvider source, string? hint)
@@ -276,19 +326,27 @@ public partial class App : Application
 
         var menu = new ContextMenu();
         menu.Items.Add(Item("Refresh now", RefreshAll));
-        // Claude's two sources sit together so the claude.ai sign-in and Claude Code are not mistaken for one thing.
+        // One item per app, worded the same way: "Sign in to …" / "Connect …" until confirmed, then only "Disconnect …".
+        menu.Items.Add(new Separator());
+        foreach (var connection in AppConnections.All.Where(c => IsShown(c.ProviderId)))
+        {
+            var id = connection.ProviderId;
+            menu.Items.Add(IsConnected(id)
+                ? Item(connection.DisconnectLabel, () => Disconnect(id))
+                : Item(connection.ConnectLabel, () => Connect(id)));
+        }
         if (IsShown(ProviderIds.Claude))
         {
-            var claude = new MenuItem { Header = "Claude" };
-            foreach (var (_, label, open) in _signIns.Where(s => s.ProviderId == ProviderIds.Claude))
-                claude.Items.Add(Item(label, open));
-            claude.Items.Add(ClaudeHookInstaller.IsInstalled()
-                ? Item("Disconnect Claude Code…", DisconnectClaude)
-                : Item("Connect Claude Code…", ConnectClaude));
-            menu.Items.Add(claude);
+            var statusLine = Item("Use Claude Code status line", () =>
+            {
+                if (ClaudeHookInstaller.IsInstalled()) DisconnectClaudeCode();
+                else ConnectClaudeCode();
+            });
+            statusLine.IsCheckable = true;
+            statusLine.IsChecked = ClaudeHookInstaller.IsInstalled();
+            menu.Items.Add(statusLine);
         }
-        foreach (var (id, label, open) in _signIns.Where(s => s.ProviderId != ProviderIds.Claude))
-            if (IsShown(id)) menu.Items.Add(Item(label, open));
+        menu.Items.Add(new Separator());
 
         menu.Items.Add(AppsMenu());
         menu.Items.Add(BarStyleMenu());
@@ -356,12 +414,7 @@ public partial class App : Application
         _settings.HiddenProviders = ShownApps.Toggle(_settings.HiddenProviders, id).ToList();
         _settings.Save();
 
-        var shown = IsShown(id);
-        foreach (var provider in _providers.Where(p => p.Id == id))
-        {
-            if (shown) provider.Start();   // reads straight away
-            else provider.Stop();
-        }
+        foreach (var provider in _providers.Where(p => p.Id == id)) ApplyRunState(provider);
         RenderNow();
         // The strip changed width; keep its right edge by the tray once the new size is laid out.
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, Place);
@@ -369,15 +422,18 @@ public partial class App : Application
 
     SignInWindow? _signInWindow;
 
-    /// <summary>One sign-in window at a time; closing it reads that source again straight away.</summary>
-    void OpenSignIn(string serviceName, string startUrl, IUsageProvider provider)
+    /// <summary>
+    /// One sign-in window at a time. Closing it reads the site straight away: a good read confirms the
+    /// sign-in (the menu then offers only Disconnect), otherwise the menu still offers Sign in.
+    /// </summary>
+    void OpenSignIn(WebSignInProvider provider)
     {
         if (_signInWindow is not null)
         {
             _signInWindow.Activate();
             return;
         }
-        _signInWindow = new SignInWindow(serviceName, startUrl);
+        _signInWindow = new SignInWindow(provider.ServiceName, provider.PageUrl, provider.Profile);
         _signInWindow.Closed += (_, _) =>
         {
             _signInWindow = null;
@@ -386,6 +442,72 @@ public partial class App : Application
         _signInWindow.Show();
         _signInWindow.Activate();
     }
+
+    void Connect(string id)
+    {
+        switch (id)
+        {
+            case ProviderIds.Claude: OpenSignIn(_claudeWeb); break;
+            case ProviderIds.OpenCode: OpenSignIn(_openCode); break;
+            case ProviderIds.Codex: ConnectCodex(); break;
+        }
+    }
+
+    void ConnectCodex()
+    {
+        var message =
+            "Battery reads the usage figures Codex writes to its session files on this PC:\n" +
+            _codex.SessionsDir + "\n\n" +
+            "It reads only the rate-limit lines, sends nothing anywhere, and never reads Codex's sign-in.\n\n" +
+            "Connect?";
+        if (!Confirm("Connect Codex", message)) return;
+        SetConnected(ProviderIds.Codex, true);
+        ApplyRunState(_codex);
+    }
+
+    async void Disconnect(string id)
+    {
+        var name = ShownApps.All.First(a => a.Id == id).Name;
+        var message = id switch
+        {
+            ProviderIds.Codex =>
+                "Battery stops reading Codex's session files and clears Codex's bars. Codex itself is not affected.",
+            _ =>
+                $"Battery signs out of {name} in its own browser and clears {name}'s bars. The {name} apps and " +
+                "your normal browser stay signed in.",
+        };
+        if (id == ProviderIds.Claude && ClaudeHookInstaller.IsInstalled())
+            message += "\n\nThe Claude Code status line is still on and will keep sending readings. " +
+                       "Untick \"Use Claude Code status line\" to stop those too.";
+        if (!Confirm(AppConnections.For(id).DisconnectLabel.TrimEnd('…'), message + "\n\nGo ahead?")) return;
+
+        _disconnecting.Add(id);
+        try
+        {
+            SetConnected(id, false);
+            var provider = _providers.First(p => p.Id == id && p != _claudeCode);
+            ApplyRunState(provider);
+            // Waits for any read under way, so that read's bars are cleared below too.
+            if (provider is WebSignInProvider web && !await web.SignOutAsync())
+            {
+                MessageBox.Show($"Battery stopped reading {name}, but could not clear its own sign-in for it. " +
+                                "It will not be read again unless you sign in.", name, MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            _store.Remove(id);
+        }
+        finally
+        {
+            // Events from that last read are queued behind this; let them pass before listening again.
+            await Dispatcher.InvokeAsync(() => { }, DispatcherPriority.Background);
+            _disconnecting.Remove(id);
+        }
+    }
+
+    readonly HashSet<string> _disconnecting = new();
+
+    static bool Confirm(string title, string message) =>
+        MessageBox.Show(message, title, MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel)
+        == MessageBoxResult.OK;
 
     static MenuItem Item(string header, Action onClick)
     {
@@ -396,16 +518,16 @@ public partial class App : Application
 
     void RefreshAll()
     {
-        foreach (var provider in _providers.Where(p => IsShown(p.Id)))
+        foreach (var provider in _providers.Where(ShouldRun))
         {
             // Providers swallow their own failures; this also guards against one that does not.
             _ = provider.RefreshAsync().ContinueWith(_ => { }, TaskScheduler.Default);
         }
     }
 
-    void ConnectClaude()
+    void ConnectClaudeCode()
     {
-        const string title = "Connect Claude Code";
+        const string title = "Use Claude Code status line";
         if (!ClaudeHookInstaller.ShimExists)
         {
             MessageBox.Show("Battery.StatusLine.exe was not found beside Battery:\n" + ClaudeHookInstaller.ShimPath,
@@ -424,7 +546,7 @@ public partial class App : Application
             "Only the status-line command changes, to:\n" + ClaudeHookInstaller.ShimPath + "\n\n" +
             keeps + "\n\n" +
             "Readings start the next time Claude Code updates its status line. " +
-            "\"Disconnect Claude Code\" puts it back.\n\nGo ahead?";
+            "Unticking \"Use Claude Code status line\" puts it back.\n\nGo ahead?";
 
         if (MessageBox.Show(message, title, MessageBoxButton.OKCancel, MessageBoxImage.Question,
                 MessageBoxResult.Cancel) != MessageBoxResult.OK)
@@ -433,7 +555,7 @@ public partial class App : Application
         try
         {
             ClaudeHookInstaller.Install();
-            RefreshAll();   // swaps the "Connect" hint for "Run Claude Code once"
+            _ = _claudeCode.RefreshAsync();   // swaps the "Use" hint for "Run Claude Code once"
         }
         catch (Exception ex)
         {
@@ -442,9 +564,9 @@ public partial class App : Application
         }
     }
 
-    void DisconnectClaude()
+    void DisconnectClaudeCode()
     {
-        const string title = "Disconnect Claude Code";
+        const string title = "Stop using Claude Code status line";
         var message =
             "This restores your previous status line, or removes it if you had none, in:\n" +
             ClaudeHookInstaller.SettingsPath + "\n\n" +
@@ -456,7 +578,7 @@ public partial class App : Application
         try
         {
             ClaudeHookInstaller.Uninstall();
-            RefreshAll();
+            _ = _claudeCode.RefreshAsync();
         }
         catch (Exception ex)
         {

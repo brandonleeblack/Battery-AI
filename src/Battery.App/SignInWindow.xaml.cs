@@ -8,7 +8,7 @@ namespace Battery.App;
 /// </summary>
 public partial class SignInWindow : Window
 {
-    public SignInWindow(string serviceName, string startUrl)
+    public SignInWindow(string serviceName, string startUrl, string? profile)
     {
         InitializeComponent();
         Title = $"Sign in to {serviceName} – Battery";
@@ -18,7 +18,8 @@ public partial class SignInWindow : Window
         {
             try
             {
-                await Web.EnsureCoreWebView2Async(await WebUsageReader.Environment);
+                var env = await WebUsageReader.Environment;
+                await Web.EnsureCoreWebView2Async(env, WebProfiles.Options(env, profile));
                 Web.CoreWebView2.Navigate(startUrl);
             }
             catch (Exception e)

@@ -19,6 +19,46 @@ public sealed class ReadingStoreTests : IDisposable
         }, readAt);
 
     [Fact]
+    public void Remove_forgets_one_app_on_disk_and_says_so()
+    {
+        var store = new ReadingStore(StorePath);
+        store.Put(Reading(ProviderIds.Claude, 38, Now));
+        store.Put(Reading(ProviderIds.Codex, 10, Now));
+        var changed = 0;
+        store.Changed += () => changed++;
+
+        store.Remove(ProviderIds.Claude);
+
+        Assert.Equal(1, changed);
+        Assert.False(store.Current.ContainsKey(ProviderIds.Claude));
+        Assert.Equal(new[] { ProviderIds.Codex }, new ReadingStore(StorePath).Current.Keys);
+    }
+
+    [Fact]
+    public void Remove_of_an_app_with_no_reading_does_nothing()
+    {
+        var store = new ReadingStore(StorePath);
+        var changed = 0;
+        store.Changed += () => changed++;
+
+        store.Remove(ProviderIds.OpenCode);
+
+        Assert.Equal(0, changed);
+    }
+
+    [Fact]
+    public void After_remove_an_older_reading_is_accepted_again()
+    {
+        var store = new ReadingStore(StorePath);
+        store.Put(Reading(ProviderIds.Claude, 38, Now));
+        store.Remove(ProviderIds.Claude);
+
+        store.Put(Reading(ProviderIds.Claude, 20, Now.AddHours(-1)));
+
+        Assert.Equal(20, store.Current[ProviderIds.Claude].Windows[0].UsedPercent);
+    }
+
+    [Fact]
     public void Put_then_reload_round_trips()
     {
         new ReadingStore(StorePath).Put(Reading(ProviderIds.Claude, 38, Now));

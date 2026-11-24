@@ -12,6 +12,24 @@ namespace Battery.App;
 /// the usage request that page makes for itself. Battery never sees a password, never reads cookies,
 /// and never touches the main browser. Use on the UI thread; reads are serialised.
 /// </summary>
+/// <summary>
+/// Each site has its own browser profile inside Battery's WebView2 folder, so signing out of one leaves
+/// the other signed in. Claude keeps the default profile it has always used; OpenCode has its own.
+/// </summary>
+public static class WebProfiles
+{
+    public const string? Claude = null;
+    public const string OpenCode = "OpenCode";
+
+    /// <summary>Controller options for a profile; the default profile when the name is null.</summary>
+    public static CoreWebView2ControllerOptions Options(CoreWebView2Environment env, string? profile)
+    {
+        var options = env.CreateCoreWebView2ControllerOptions();
+        if (profile is not null) options.ProfileName = profile;
+        return options;
+    }
+}
+
 public sealed class WebUsageReader : IDisposable
 {
     static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
@@ -27,22 +45,24 @@ public sealed class WebUsageReader : IDisposable
 
     readonly SemaphoreSlim _gate = new(1, 1);
     HwndSource? _host;
-    CoreWebView2Controller? _controller;
+    readonly Dictionary<string, CoreWebView2Controller> _controllers = new();
 
     public enum Outcome { Ok, SignedOut, Failed, NoWebView }
 
     public sealed record Result(Outcome Outcome, int Status, string? Body);
 
     /// <param name="source">Short name for the debug log ("claude", "opencode").</param>
+    /// <param name="profile">The site's own browser profile (see <see cref="WebProfiles"/>).</param>
     /// <param name="pageUrl">The page to load.</param>
     /// <param name="isUsageRequest">Which of the page's requests carries the usage.</param>
     /// <param name="isSignInPage">True when loading ended on a sign-in page instead.</param>
-    public async Task<Result> ReadAsync(string source, string pageUrl, Func<string, bool> isUsageRequest, Func<string?, bool> isSignInPage)
+    public async Task<Result> ReadAsync(string source, string? profile, string pageUrl,
+        Func<string, bool> isUsageRequest, Func<string?, bool> isSignInPage)
     {
         await _gate.WaitAsync();
         try
         {
-            var core = await EnsureCoreAsync();
+            var core = await EnsureCoreAsync(profile);
             if (core is null) return new Result(Outcome.NoWebView, 0, null);
 
             var (status, body) = await FetchAsync(source, core, pageUrl, isUsageRequest, isSignInPage);
@@ -67,17 +87,45 @@ public sealed class WebUsageReader : IDisposable
         }
     }
 
+    /// <summary>
+    /// Signs Battery out of one site: clears everything that site's profile holds (sign-in session,
+    /// storage, cache) without reading any of it. Other sites' profiles, the main browser and the
+    /// service's own apps are untouched. False when the browser is not available.
+    /// </summary>
+    public async Task<bool> SignOutAsync(string source, string? profile)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            var core = await EnsureCoreAsync(profile);
+            if (core is null) return false;
+            await core.Profile.ClearBrowsingDataAsync();
+            Debug(source, "signed out (profile cleared)");
+            return true;
+        }
+        catch (Exception e)
+        {
+            Debug(source, "sign-out failed " + e.GetType().Name);
+            return false;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     public void Dispose()
     {
-        _controller?.Close();
-        _controller = null;
+        foreach (var controller in _controllers.Values) controller.Close();
+        _controllers.Clear();
         _host?.Dispose();
         _host = null;
     }
 
-    async Task<CoreWebView2?> EnsureCoreAsync()
+    async Task<CoreWebView2?> EnsureCoreAsync(string? profile)
     {
-        if (_controller is not null) return _controller.CoreWebView2;
+        var key = profile ?? "";
+        if (_controllers.TryGetValue(key, out var existing)) return existing.CoreWebView2;
         try
         {
             // A never-shown window to parent the browser; nothing is ever displayed.
@@ -89,13 +137,16 @@ public sealed class WebUsageReader : IDisposable
                 ExtendedWindowStyle = 0x00000080 | 0x08000000,   // WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE
             });
             var env = await Environment;
-            _controller = await env.CreateCoreWebView2ControllerAsync(_host.Handle);
-            _controller.IsVisible = false;
-            var settings = _controller.CoreWebView2.Settings;
+            var controller = profile is null
+                ? await env.CreateCoreWebView2ControllerAsync(_host.Handle)
+                : await env.CreateCoreWebView2ControllerAsync(_host.Handle, WebProfiles.Options(env, profile));
+            controller.IsVisible = false;
+            var settings = controller.CoreWebView2.Settings;
             settings.AreDefaultScriptDialogsEnabled = false;
             settings.IsStatusBarEnabled = false;
             settings.AreDevToolsEnabled = false;
-            return _controller.CoreWebView2;
+            _controllers[key] = controller;
+            return controller.CoreWebView2;
         }
         catch (Exception e) when (e is WebView2RuntimeNotFoundException or FileNotFoundException or COMException)
         {
@@ -117,6 +168,7 @@ public sealed class WebUsageReader : IDisposable
         void OnStarting(object? sender, CoreWebView2NavigationStartingEventArgs e)
         {
             // Redirects keep the navigation id, so the first start after our Navigate is ours throughout.
+            Debug(source, $"nav-starting id={e.NavigationId} to={SafePath(e.Uri)}");
             if (ourNavigation is null && e.Uri.StartsWith(pageUrl, StringComparison.OrdinalIgnoreCase))
                 ourNavigation = e.NavigationId;
         }
@@ -125,6 +177,7 @@ public sealed class WebUsageReader : IDisposable
         {
             try
             {
+                if (e.Request.Uri.Contains("/api/")) Debug(source, $"api {e.Response.StatusCode} {SafePath(e.Request.Uri)}");
                 if (!isUsageRequest(e.Request.Uri)) return;
                 var status = e.Response.StatusCode;
                 Debug(source, $"response-event status={status}");
@@ -148,6 +201,7 @@ public sealed class WebUsageReader : IDisposable
 
         void OnCompleted(object? sender, CoreWebView2NavigationCompletedEventArgs e)
         {
+            Debug(source, $"nav-done id={e.NavigationId} ours={ourNavigation} ok={e.IsSuccess} http={e.HttpStatusCode}");
             if (ourNavigation is null || e.NavigationId != ourNavigation) return;
             Debug(source, $"nav-completed ok={e.IsSuccess} web={e.WebErrorStatus} http={e.HttpStatusCode} source={SafePath(core.Source)}");
             if (!e.IsSuccess) done.TrySetResult((0, null));   // offline, DNS failure, server error page

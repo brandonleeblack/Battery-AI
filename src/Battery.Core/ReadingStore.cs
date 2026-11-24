@@ -39,6 +39,20 @@ public sealed class ReadingStore
         Changed?.Invoke();
     }
 
+    /// <summary>Forgets one app's reading (after Disconnect), so its bars go back to the empty outline.</summary>
+    public void Remove(string providerId)
+    {
+        lock (_gate)
+        {
+            if (!_current.ContainsKey(providerId)) return;
+            var next = new Dictionary<string, ProviderReading>(_current);
+            next.Remove(providerId);
+            _current = next;
+            Save(_current);
+        }
+        Changed?.Invoke();
+    }
+
     static Dictionary<string, ProviderReading> Load(string path)
     {
         try
