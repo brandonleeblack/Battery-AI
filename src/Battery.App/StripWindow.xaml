@@ -1,0 +1,19 @@
+<Window x:Class="Battery.App.StripWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Battery"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Focusable="False"
+        UseLayoutRounding="True">
+    <!-- Box: padding 8 (top/bottom) x 10 (left/right), radius 6. Colours come from the Theme in Render. -->
+    <Border x:Name="Box" CornerRadius="6" Padding="10,8">
+        <StackPanel x:Name="Groups" Orientation="Horizontal" />
+    </Border>
+</Window>
