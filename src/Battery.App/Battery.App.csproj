@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -17,7 +17,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Battery.Core\Battery.Core.csproj" />
     <!-- Only so Battery.StatusLine.exe lands beside the app in dev builds; nothing calls into it. -->
-    <ProjectReference Include="..\Battery.StatusLine\Battery.StatusLine.csproj" />
+    <ProjectReference Include="..\Battery.StatusLine\Battery.StatusLine.csproj" Condition="'$(Configuration)' == 'Debug'" />
   </ItemGroup>
 
 </Project>
