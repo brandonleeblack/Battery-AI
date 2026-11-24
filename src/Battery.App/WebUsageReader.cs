@@ -227,7 +227,13 @@ public sealed class WebUsageReader : IDisposable
         {
             core.Navigate(pageUrl);
             var finished = await Task.WhenAny(done.Task, Task.Delay(Timeout));
-            return finished == done.Task ? done.Task.Result : (0, null);
+            if (finished != done.Task)
+            {
+                // A browser check or error page names itself in the title ("Just a moment…"); no account data.
+                Debug(source, $"timeout title=\"{Truncate(core.DocumentTitle, 60)}\" source={SafePath(core.Source)}");
+                return (0, null);
+            }
+            return done.Task.Result;
         }
         finally
         {
@@ -253,6 +259,8 @@ public sealed class WebUsageReader : IDisposable
         }
         catch { }
     }
+
+    static string Truncate(string? s, int max) => s is null ? "" : s.Length <= max ? s : s[..max];
 
     static string SafePath(string? url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var u)
