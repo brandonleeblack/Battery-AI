@@ -74,6 +74,7 @@ public partial class App : Application
         _strip.Show();
         Place();
 
+        _providers.Add(new ClaudeProvider());
         _providers.Add(new CodexProvider());
         foreach (var provider in _providers)
         {
@@ -288,6 +289,7 @@ public partial class App : Application
         try
         {
             ClaudeHookInstaller.Install();
+            RefreshAll();   // swaps the "Connect" hint for "Run Claude Code once"
         }
         catch (Exception ex)
         {
@@ -309,6 +311,7 @@ public partial class App : Application
         try
         {
             ClaudeHookInstaller.Uninstall();
+            RefreshAll();
         }
         catch (Exception ex)
         {

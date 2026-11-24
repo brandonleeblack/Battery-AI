@@ -1,0 +1,28 @@
+{
+  "subscriberUserId": "user_SCRUBBED",
+  "product": "go",
+  "access": {
+    "startsAt": "2026-11-17T17:55:26.000Z",
+    "endsAt": "2026-12-17T17:55:26.000Z",
+    "cancelAtPeriodEnd": false,
+    "meters": {
+      "fiveHour": {
+        "startsAt": null,
+        "resetsAt": null,
+        "limitMicroCents": "1200000000",
+        "usedMicroCents": "0"
+      },
+      "week": {
+        "startsAt": "2026-11-23T00:00:00.000Z",
+        "resetsAt": "2026-11-30T00:00:00.000Z",
+        "limitMicroCents": "3000000000",
+        "usedMicroCents": "2413179"
+      },
+      "month": {
+        "resetsAt": "2026-12-17T17:55:26.000Z",
+        "limitMicroCents": "6000000000",
+        "usedMicroCents": "3002413179"
+      }
+    }
+  }
+}
