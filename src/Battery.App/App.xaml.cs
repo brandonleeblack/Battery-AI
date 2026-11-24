@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -36,6 +36,8 @@ public partial class App : Application
 
     /// <summary>"Sign in to â€¦" menu items, one per web source, in menu order.</summary>
     readonly List<(string ProviderId, string Label, Action Open)> _signIns = new();
+
+    BarStyle CurrentBarStyle => BarStyles.Parse(_settings.BarStyle);
 
     bool IsShown(string providerId) => ShownApps.Visible(_settings.HiddenProviders).Any(a => a.Id == providerId);
 
@@ -168,10 +170,10 @@ public partial class App : Application
         var now = DateTimeOffset.Now;
         var apps = StripModel.Build(_store.Current, MergedHints(now), now, _settings.HiddenProviders);
         var theme = Theme.For(_themeWatcher.IsLight);
-        _strip.Render(apps, theme);
+        _strip.Render(apps, theme, CurrentBarStyle);
         if (_panel is { IsVisible: true })
         {
-            _panel.Render(apps, theme, now);
+            _panel.Render(apps, theme, CurrentBarStyle, now);
             Dispatcher.BeginInvoke(DispatcherPriority.Loaded, PlacePanel);   // its height may have changed
         }
     }
@@ -239,7 +241,7 @@ public partial class App : Application
         _panel = new HoverPanel();
         _panel.MouseEnter += (_, _) => _hoverHide.Stop();
         _panel.MouseLeave += (_, _) => _hoverHide.Start();
-        _panel.Render(StripModel.Build(_store.Current, MergedHints(now), now, _settings.HiddenProviders), Theme.For(_themeWatcher.IsLight), now);
+        _panel.Render(StripModel.Build(_store.Current, MergedHints(now), now, _settings.HiddenProviders), Theme.For(_themeWatcher.IsLight), CurrentBarStyle, now);
         _panel.Opacity = 0;   // shown first so it has a size, then moved, then revealed
         _panel.Show();
         _panel.UpdateLayout();
@@ -284,6 +286,7 @@ public partial class App : Application
         }
 
         menu.Items.Add(AppsMenu());
+        menu.Items.Add(BarStyleMenu());
 
         var autostart = Item("Start with Windows", () =>
         {
@@ -322,6 +325,25 @@ public partial class App : Application
             show.Items.Add(item);
         }
         return show;
+    }
+
+/// <summary>"Bar style" submenu: Clean, Glass gel or Cells, one ticked.</summary>
+    MenuItem BarStyleMenu()
+    {
+        var menu = new MenuItem { Header = "Bar style" };
+        foreach (var (style, name) in BarStyles.All)
+        {
+            var item = Item(name, () =>
+            {
+                _settings.BarStyle = style.ToString();
+                _settings.Save();
+                RenderNow();
+            });
+            item.IsCheckable = true;
+            item.IsChecked = style == CurrentBarStyle;
+            menu.Items.Add(item);
+        }
+        return menu;
     }
 
     void ToggleApp(string id)

@@ -53,20 +53,18 @@ public partial class StripWindow : Window
     public void MoveToPixels(double x, double y) =>
         WindowStyles.MoveTopmost(_hwnd, (int)Math.Round(x), (int)Math.Round(y));
 
-    public void Render(IReadOnlyList<AppView> apps, Theme theme)
+    public void Render(IReadOnlyList<AppView> apps, Theme theme, BarStyle style)
     {
         Box.Background = Paint.FromHex(theme.Box);
-        // The Daylight border is drawn inside the box so both themes have the same outer size.
-        Box.BorderThickness = new Thickness(theme.BoxBorder is null ? 0 : 1);
         Box.BorderBrush = theme.BoxBorder is null ? null : Paint.FromHex(theme.BoxBorder);
-        Box.Padding = theme.BoxBorder is null ? new Thickness(10, 8, 10, 8) : new Thickness(9, 7, 9, 7);
+        Highlight.Fill = Paint.FromHex(theme.BoxHighlight);
 
         Groups.Children.Clear();
         foreach (var app in apps)
         {
             var bars = new StackPanel { Orientation = Orientation.Vertical, VerticalAlignment = VerticalAlignment.Center };
-            bars.Children.Add(BarControl.ForStrip(app.FiveHour, theme));
-            var weekly = BarControl.ForStrip(app.Weekly, theme);
+            bars.Children.Add(BarControl.ForStrip(app.FiveHour, theme, style));
+            var weekly = BarControl.ForStrip(app.Weekly, theme, style);
             weekly.Margin = new Thickness(0, BarGap, 0, 0);
             bars.Children.Add(weekly);
 

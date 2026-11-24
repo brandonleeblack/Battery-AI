@@ -29,6 +29,9 @@ public sealed class Settings
     /// <summary>Provider ids left off the strip (right-click › Show). Hidden apps are not read either.</summary>
     public List<string> HiddenProviders { get; set; } = new();
 
+    /// <summary>"Clean", "Gel" or "Cells" (right-click › Bar style); anything else reads as Clean.</summary>
+    public string? BarStyle { get; set; }
+
     /// <summary>False until the Start-with-Windows default has been applied once.</summary>
     public bool FirstRunDone { get; set; }
 

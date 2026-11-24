@@ -14,7 +14,11 @@ public partial class HoverPanel : Window
     const double SectionGap = 12, RowGap = 6, CellGap = 10;
     const double LabelWidth = 40, PercentWidth = 32;
 
+    const double CornerRadius = 8;
+
     IntPtr _hwnd;
+    bool _blurred;
+    Theme? _theme;
 
     public HoverPanel()
     {
@@ -23,20 +27,31 @@ public partial class HoverPanel : Window
         {
             _hwnd = new WindowInteropHelper(this).Handle;
             WindowStyles.MakeToolWindowNoActivate(_hwnd);
+            _blurred = Acrylic.TryEnable(_hwnd);
+            if (_theme is not null) PaintBackground(_theme);
+        };
+        SizeChanged += (_, _) =>
+        {
+            if (_blurred) Acrylic.RoundCorners(_hwnd, CornerRadius * VisualTreeHelper.GetDpi(this).DpiScaleX);
         };
     }
+
+    /// <summary>The translucent tint over the blur, or a nearly solid colour when there is no blur.</summary>
+    void PaintBackground(Theme theme) =>
+        Box.Background = Paint.FromHex(_blurred ? theme.PanelBackground : theme.PanelSolidBackground);
 
     public RectD PixelRect => WindowStyles.TryGetRect(_hwnd, out var r) ? r : default;
 
     public void MoveToPixels(double x, double y) =>
         WindowStyles.MoveTopmost(_hwnd, (int)Math.Round(x), (int)Math.Round(y));
 
-    public void Render(IReadOnlyList<AppView> apps, Theme theme, DateTimeOffset now)
+    public void Render(IReadOnlyList<AppView> apps, Theme theme, BarStyle style, DateTimeOffset now)
     {
         var text = Paint.FromHex(theme.PanelText);
         var secondary = Paint.FromHex(theme.SecondaryText);
 
-        Box.Background = Paint.FromHex(theme.PanelBackground);
+        _theme = theme;
+        PaintBackground(theme);
         Box.BorderBrush = Paint.FromHex(theme.PanelBorder);
         Foreground = text;
 
@@ -57,7 +72,7 @@ public partial class HoverPanel : Window
 
             foreach (var bar in app.AllWindows)
             {
-                var row = WindowRow(bar, theme, text, secondary, now);
+                var row = WindowRow(bar, theme, style, text, secondary, now);
                 row.Margin = new Thickness(0, RowGap, 0, 0);
                 section.Children.Add(row);
             }
@@ -78,16 +93,16 @@ public partial class HoverPanel : Window
     static string Footnote(AppView app, DateTimeOffset now)
     {
         var updated = app.ReadAt is { } readAt ? "updated " + HoverFormat.FormatAge(now - readAt) : null;
-        if (app.Hint is not null) return updated is null ? app.Hint : $"{app.Hint} · {updated}";
+        if (app.Hint is not null) return updated is null ? app.Hint : $"{app.Hint} Â· {updated}";
         return updated ?? "No data yet";
     }
 
-    static StackPanel WindowRow(BarView bar, Theme theme, Brush text, Brush secondary, DateTimeOffset now)
+    static StackPanel WindowRow(BarView bar, Theme theme, BarStyle style, Brush text, Brush secondary, DateTimeOffset now)
     {
         var row = Row();
         row.Children.Add(new TextBlock { Text = HoverFormat.Label(bar.Kind), Width = LabelWidth, Foreground = secondary });
 
-        var barControl = BarControl.ForPanel(bar, theme);
+        var barControl = BarControl.ForPanel(bar, theme, style);
         barControl.Margin = new Thickness(CellGap, 0, CellGap, 0);
         barControl.VerticalAlignment = VerticalAlignment.Center;
         row.Children.Add(barControl);

@@ -15,8 +15,9 @@
         UseLayoutRounding="True"
         FontFamily="Segoe UI Variable Text, Segoe UI"
         FontSize="12">
-    <!-- Width 348, padding 12 (top/bottom) x 14 (left/right), radius 10, 1 px border. Colours come from the Theme. -->
-    <Border x:Name="Box" CornerRadius="10" BorderThickness="1" Padding="14,12">
+    <!-- Width 348, padding 12 (top/bottom) x 14 (left/right), radius 8, 1 px border. Frosted acrylic: Windows
+         blurs what is behind, the Theme's translucent tint is drawn here on top. -->
+    <Border x:Name="Box" CornerRadius="8" BorderThickness="1" Padding="14,12">
         <StackPanel x:Name="Sections" Orientation="Vertical" />
     </Border>
 </Window>
