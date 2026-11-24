@@ -34,7 +34,7 @@ public partial class App : Application
     readonly Dictionary<IUsageProvider, (bool Reported, string? Hint)> _sourceHints = new();   // UI thread only
     readonly WebUsageReader _webReader = new();
 
-    /// <summary>"Sign in to â€¦" menu items, one per web source, in menu order.</summary>
+    /// <summary>"Sign in to …" menu items, one per web source, in menu order.</summary>
     readonly List<(string ProviderId, string Label, Action Open)> _signIns = new();
 
     BarStyle CurrentBarStyle => BarStyles.Parse(_settings.BarStyle);
@@ -91,7 +91,7 @@ public partial class App : Application
         _providers.Add(new CodexProvider());
         var openCode = new OpenCodeProvider(_webReader, () => _store.Current.ContainsKey(ProviderIds.OpenCode));
         _providers.Add(openCode);
-        _signIns.Add((ProviderIds.OpenCode, "Sign in to OpenCodeâ€¦", () => OpenSignIn("OpenCode", OpenCodeUsageParser.ConsoleUrl, openCode)));
+        _signIns.Add((ProviderIds.OpenCode, "Sign in to OpenCode…", () => OpenSignIn("OpenCode", OpenCodeUsageParser.ConsoleUrl, openCode)));
         foreach (var provider in _providers)
         {
             var source = provider;
@@ -137,7 +137,7 @@ public partial class App : Application
             _settings.Save();
         });
         _providers.Add(claudeWeb);
-        _signIns.Add((ProviderIds.Claude, "Sign in to Claudeâ€¦", () => OpenSignIn("Claude", ClaudeWebUsageParser.UsagePageUrl, claudeWeb)));
+        _signIns.Add((ProviderIds.Claude, "Sign in to Claude…", () => OpenSignIn("Claude", ClaudeWebUsageParser.UsagePageUrl, claudeWeb)));
     }
 
     void SetHint(IUsageProvider source, string? hint)
@@ -282,7 +282,7 @@ public partial class App : Application
         if (IsShown(ProviderIds.Claude))
         {
             if (ClaudeHookInstaller.IsInstalled()) menu.Items.Add(Item("Disconnect Claude Code", DisconnectClaude));
-            else menu.Items.Add(Item("Connect Claude Codeâ€¦", ConnectClaude));
+            else menu.Items.Add(Item("Connect Claude Code…", ConnectClaude));
         }
 
         menu.Items.Add(AppsMenu());

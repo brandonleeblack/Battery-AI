@@ -93,7 +93,7 @@ public partial class HoverPanel : Window
     static string Footnote(AppView app, DateTimeOffset now)
     {
         var updated = app.ReadAt is { } readAt ? "updated " + HoverFormat.FormatAge(now - readAt) : null;
-        if (app.Hint is not null) return updated is null ? app.Hint : $"{app.Hint} Â· {updated}";
+        if (app.Hint is not null) return updated is null ? app.Hint : $"{app.Hint} · {updated}";
         return updated ?? "No data yet";
     }
 
