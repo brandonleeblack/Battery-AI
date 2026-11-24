@@ -123,7 +123,6 @@ Everything lives in `%AppData%\Battery`:
 | `claude-status.json` | the last blob Claude Code passed to the status line |
 | `statusline-chain.txt` | your previous status-line command, while Claude Code is connected |
 | `WebView2\` | the private browser profile holding the claude.ai and OpenCode sign-in sessions |
-
 | `error.log` | only if something unexpected went wrong: the error type and where |
 
 Set the environment variable `BATTERY_DEBUG=1` to also write `web-debug.log` for the claude.ai and
