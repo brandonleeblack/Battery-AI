@@ -1,0 +1,24 @@
+{
+  "five_hour": {
+    "utilization": 51.0,
+    "resets_at": "2026-11-24T11:59:59.791395+00:00",
+    "limit_dollars": null,
+    "used_dollars": null,
+    "remaining_dollars": null,
+    "locked_reason": null
+  },
+  "seven_day": {
+    "utilization": 33.0,
+    "resets_at": "2026-11-25T19:59:59.791417+00:00",
+    "limit_dollars": null,
+    "used_dollars": null,
+    "remaining_dollars": null,
+    "locked_reason": null
+  },
+  "seven_day_opus": null,
+  "seven_day_sonnet": null,
+  "extra_usage": {
+    "is_enabled": false,
+    "monthly_limit": null
+  }
+}

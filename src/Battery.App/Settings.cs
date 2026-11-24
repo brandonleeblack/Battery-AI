@@ -23,6 +23,9 @@ public sealed class Settings
 
     public bool StartWithWindows { get; set; } = true;
 
+    /// <summary>True once claude.ai has given a reading, so a later sign-out reads as an expired session.</summary>
+    public bool ClaudeWebSeen { get; set; }
+
     /// <summary>False until the Start-with-Windows default has been applied once.</summary>
     public bool FirstRunDone { get; set; }
 

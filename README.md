@@ -14,7 +14,7 @@ has gone by, so you can see at a glance whether you are ahead of the clock.
 - **Empty outline:** never read yet. Hover to see what to do.
 
 Hover over the strip for every window (including OpenCode's monthly one), percent used, time to reset
-and how old each reading is. Right-click for **Refresh now**, **Sign in to OpenCode…**,
+and how old each reading is. Right-click for **Refresh now**, **Sign in to Claude…**, **Sign in to OpenCode…**,
 **Connect / Disconnect Claude Code**, **Start with Windows** and **Quit**. Drag the strip sideways to
 move it along the taskbar; the position is remembered.
 
@@ -43,7 +43,19 @@ Code, because both remember the path. Tests: `dotnet test`.
 All three sources are unofficial and may change without notice. Each provider is isolated, so one
 breaking does not affect the others; it just shows a hint in the hover panel.
 
-### Claude: right-click › Connect Claude Code…
+### Claude: right-click › Sign in to Claude… (and optionally Connect Claude Code…)
+
+Claude has two sources. Battery shows whichever reading is newer.
+
+**claude.ai (recommended).** **Sign in to Claude…** opens claude.ai in a browser window that uses
+Battery's own private profile (`%AppData%\Battery\WebView2`). Sign in there once and close it; email
+sign-in works more reliably there than Google. Every 5 minutes Battery loads Settings › Usage in a
+hidden copy of that browser and reads the 5-hour and weekly figures the page fetches
+(`/api/organizations/<id>/usage`). These are for your whole account, so use from Claude Desktop, the
+web and Claude Code all counts. Battery never sees your password and never reads the sign-in stored by
+Claude Desktop or Claude Code. If the session expires, the bars dim and the hover says to sign in again.
+
+**Claude Code status line (optional, faster while Claude Code runs).**
 
 Claude Code passes a JSON blob to its status-line command on every update; it includes
 `rate_limits.five_hour` and `rate_limits.seven_day`, each with `used_percentage` and `resets_at`.
@@ -110,10 +122,12 @@ Everything lives in `%AppData%\Battery`:
 | `readings.json` | last reading per app, so a restart shows bars immediately |
 | `claude-status.json` | the last blob Claude Code passed to the status line |
 | `statusline-chain.txt` | your previous status-line command, while Claude Code is connected |
-| `WebView2\` | the private browser profile holding the OpenCode sign-in session |
+| `WebView2\` | the private browser profile holding the claude.ai and OpenCode sign-in sessions |
 
-Set the environment variable `BATTERY_DEBUG=1` to also write `opencode-debug.log`. It holds HTTP
-statuses and page paths only, never page contents.
+| `error.log` | only if something unexpected went wrong: the error type and where |
+
+Set the environment variable `BATTERY_DEBUG=1` to also write `web-debug.log` for the claude.ai and
+OpenCode readers. It holds HTTP statuses and page paths with ids blanked, never page contents.
 
 ## Uninstall
 

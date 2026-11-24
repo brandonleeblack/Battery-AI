@@ -31,10 +31,12 @@ public partial class App : Application
     DispatcherTimer _hoverHide = null!;
     ReadingStore _store = null!;
     readonly List<IUsageProvider> _providers = new();
-    readonly Dictionary<string, string> _hints = new();   // UI thread only
+    readonly Dictionary<string, string> _hints = new();   // per app, merged from its sources; UI thread only
+    readonly Dictionary<IUsageProvider, (bool Reported, string? Hint)> _sourceHints = new();   // UI thread only
+    readonly WebUsageReader _webReader = new();
 
-    /// <summary>Opens the OpenCode sign-in window; null until the OpenCode provider exists.</summary>
-    Action? _signInToOpenCode;
+    /// <summary>"Sign in to …" menu items, one per web source, in menu order.</summary>
+    readonly List<(string Label, Action Open)> _signIns = new();
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -81,16 +83,18 @@ public partial class App : Application
         _strip.Show();
         Place();
 
+        // Order matters twice: for an app with several sources, the first one's hint is the advice shown.
+        AddWebSources();
         _providers.Add(new ClaudeProvider());
         _providers.Add(new CodexProvider());
-        var openCode = new OpenCodeProvider(() => _store.Current.ContainsKey(ProviderIds.OpenCode));
+        var openCode = new OpenCodeProvider(_webReader, () => _store.Current.ContainsKey(ProviderIds.OpenCode));
         _providers.Add(openCode);
-        _signInToOpenCode = () => OpenSignIn(openCode);
+        _signIns.Add(("Sign in to OpenCode…", () => OpenSignIn("OpenCode", OpenCodeUsageParser.ConsoleUrl, openCode)));
         foreach (var provider in _providers)
         {
-            var id = provider.Id;
+            var source = provider;
             provider.ReadingAvailable += reading => _store.Put(reading);
-            provider.HintChanged += hint => Dispatcher.BeginInvoke(() => SetHint(id, hint));
+            provider.HintChanged += hint => Dispatcher.BeginInvoke(() => SetHint(source, hint));
             provider.Start();
         }
 
@@ -106,6 +110,7 @@ public partial class App : Application
         _placeTimer?.Stop();
         _renderTimer?.Stop();
         foreach (var provider in _providers) provider.Stop();
+        _webReader.Dispose();
         _themeWatcher?.Dispose();
         if (_singleInstance is not null)
         {
@@ -117,11 +122,32 @@ public partial class App : Application
 
     void OnDisplaySettingsChanged(object? sender, EventArgs e) => Dispatcher.BeginInvoke(Place);
 
-    void SetHint(string providerId, string? hint)
+    /// <summary>Sources added before the file and folder sources (filled in by the Claude web source).</summary>
+    void AddWebSources()
     {
-        _hints.TryGetValue(providerId, out var current);
-        if (current == hint) return;
-        if (hint is null) _hints.Remove(providerId); else _hints[providerId] = hint;
+        // claude.ai first: account-wide, so it covers Desktop and web use. Its sign-in advice is the
+        // hint shown while neither Claude source has a reading.
+        var claudeWeb = new ClaudeWebProvider(_webReader, () => _settings.ClaudeWebSeen);
+        claudeWeb.ReadingAvailable += _ => Dispatcher.BeginInvoke(() =>
+        {
+            if (_settings.ClaudeWebSeen) return;
+            _settings.ClaudeWebSeen = true;
+            _settings.Save();
+        });
+        _providers.Add(claudeWeb);
+        _signIns.Add(("Sign in to Claude…", () => OpenSignIn("Claude", ClaudeWebUsageParser.UsagePageUrl, claudeWeb)));
+    }
+
+    void SetHint(IUsageProvider source, string? hint)
+    {
+        _sourceHints[source] = (true, hint);
+        var id = source.Id;
+        var merged = HintMerge.For(_providers.Where(p => p.Id == id)
+            .Select(p => _sourceHints.TryGetValue(p, out var h) ? h : (false, null)));
+
+        _hints.TryGetValue(id, out var current);
+        if (current == merged) return;
+        if (merged is null) _hints.Remove(id); else _hints[id] = merged;
         RenderNow();
     }
 
@@ -226,7 +252,7 @@ public partial class App : Application
 
         var menu = new ContextMenu();
         menu.Items.Add(Item("Refresh now", RefreshAll));
-        if (_signInToOpenCode is { } signIn) menu.Items.Add(Item("Sign in to OpenCode…", signIn));
+        foreach (var (label, open) in _signIns) menu.Items.Add(Item(label, open));
 
         if (ClaudeHookInstaller.IsInstalled()) menu.Items.Add(Item("Disconnect Claude Code", DisconnectClaude));
         else menu.Items.Add(Item("Connect Claude Code…", ConnectClaude));
@@ -253,16 +279,17 @@ public partial class App : Application
         menu.IsOpen = true;
     }
 
-    OpenCodeSignInWindow? _signInWindow;
+    SignInWindow? _signInWindow;
 
-    void OpenSignIn(OpenCodeProvider provider)
+    /// <summary>One sign-in window at a time; closing it reads that source again straight away.</summary>
+    void OpenSignIn(string serviceName, string startUrl, IUsageProvider provider)
     {
         if (_signInWindow is not null)
         {
             _signInWindow.Activate();
             return;
         }
-        _signInWindow = new OpenCodeSignInWindow();
+        _signInWindow = new SignInWindow(serviceName, startUrl);
         _signInWindow.Closed += (_, _) =>
         {
             _signInWindow = null;

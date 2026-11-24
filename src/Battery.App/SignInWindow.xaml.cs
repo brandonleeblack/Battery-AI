@@ -1,25 +1,25 @@
 using System.Windows;
-using Battery.App.Providers;
 
 namespace Battery.App;
 
 /// <summary>
-/// A normal, visible browser window on Battery's own WebView2 profile, opened at the OpenCode console.
+/// A normal, visible browser window on Battery's own WebView2 profile, opened at a service's site.
 /// The user signs in here; Battery reads nothing from this window and stores nothing typed into it.
 /// </summary>
-public partial class OpenCodeSignInWindow : Window
+public partial class SignInWindow : Window
 {
-    const string StartUrl = "https://opencode.ai/console";
-
-    public OpenCodeSignInWindow()
+    public SignInWindow(string serviceName, string startUrl)
     {
         InitializeComponent();
+        Title = $"Sign in to {serviceName} – Battery";
+        Blurb.Text = $"Sign in to {serviceName} here. Battery keeps only the sign-in session, in its own private " +
+                     "profile; it never sees your password. Close this window once you are signed in.";
         Loaded += async (_, _) =>
         {
             try
             {
-                await Web.EnsureCoreWebView2Async(await OpenCodeProvider.Environment);
-                Web.CoreWebView2.Navigate(StartUrl);
+                await Web.EnsureCoreWebView2Async(await WebUsageReader.Environment);
+                Web.CoreWebView2.Navigate(startUrl);
             }
             catch (Exception e)
             {
