@@ -26,6 +26,9 @@ public sealed class Settings
     /// <summary>True once claude.ai has given a reading, so a later sign-out reads as an expired session.</summary>
     public bool ClaudeWebSeen { get; set; }
 
+    /// <summary>Provider ids left off the strip (right-click › Show). Hidden apps are not read either.</summary>
+    public List<string> HiddenProviders { get; set; } = new();
+
     /// <summary>False until the Start-with-Windows default has been applied once.</summary>
     public bool FirstRunDone { get; set; }
 

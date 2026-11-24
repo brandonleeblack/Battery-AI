@@ -23,21 +23,19 @@ public static class StripModel
 {
     public static readonly TimeSpan StaleAfter = TimeSpan.FromMinutes(15);
 
-    static readonly (string Id, string Name)[] Apps =
-    {
-        (ProviderIds.Claude, "Claude"),
-        (ProviderIds.Codex, "Codex"),
-        (ProviderIds.OpenCode, "OpenCode Go"),
-    };
-
-    /// <summary>Always three apps, in the fixed order Claude, Codex, OpenCode Go.</summary>
+    /// <summary>
+    /// The shown apps in the fixed order Claude, Codex, OpenCode Go: all three unless some are hidden
+    /// (see <see cref="ShownApps"/>; at least one always shows).
+    /// </summary>
     public static IReadOnlyList<AppView> Build(
         IReadOnlyDictionary<string, ProviderReading> readings,
         IReadOnlyDictionary<string, string> hints,
-        DateTimeOffset now)
+        DateTimeOffset now,
+        IEnumerable<string>? hidden = null)
     {
-        var result = new List<AppView>(Apps.Length);
-        foreach (var (id, name) in Apps)
+        var apps = ShownApps.Visible(hidden);
+        var result = new List<AppView>(apps.Count);
+        foreach (var (id, name) in apps)
         {
             hints.TryGetValue(id, out var hint);
             if (!readings.TryGetValue(id, out var reading))

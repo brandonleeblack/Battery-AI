@@ -12,8 +12,10 @@
         ShowActivated="False"
         Focusable="False"
         UseLayoutRounding="True">
-    <!-- Box: padding 8 (top/bottom) x 10 (left/right), radius 6. Colours come from the Theme in Render. -->
-    <Border x:Name="Box" CornerRadius="6" Padding="10,8">
+    <!-- Box: padding 8 (top/bottom) x 10 (left/right), radius 6. Colours come from the Theme in Render.
+         Right-aligned: Windows keeps the window at least ~132 px wide, more than one or two apps need,
+         and the spare width on the left is fully transparent (and click-through). -->
+    <Border x:Name="Box" CornerRadius="6" Padding="10,8" HorizontalAlignment="Right">
         <StackPanel x:Name="Groups" Orientation="Horizontal" />
     </Border>
 </Window>

@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -34,8 +34,10 @@ public partial class App : Application
     readonly Dictionary<IUsageProvider, (bool Reported, string? Hint)> _sourceHints = new();   // UI thread only
     readonly WebUsageReader _webReader = new();
 
-    /// <summary>"Sign in to …" menu items, one per web source, in menu order.</summary>
-    readonly List<(string Label, Action Open)> _signIns = new();
+    /// <summary>"Sign in to â€¦" menu items, one per web source, in menu order.</summary>
+    readonly List<(string ProviderId, string Label, Action Open)> _signIns = new();
+
+    bool IsShown(string providerId) => ShownApps.Visible(_settings.HiddenProviders).Any(a => a.Id == providerId);
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -87,13 +89,13 @@ public partial class App : Application
         _providers.Add(new CodexProvider());
         var openCode = new OpenCodeProvider(_webReader, () => _store.Current.ContainsKey(ProviderIds.OpenCode));
         _providers.Add(openCode);
-        _signIns.Add(("Sign in to OpenCode…", () => OpenSignIn("OpenCode", OpenCodeUsageParser.ConsoleUrl, openCode)));
+        _signIns.Add((ProviderIds.OpenCode, "Sign in to OpenCodeâ€¦", () => OpenSignIn("OpenCode", OpenCodeUsageParser.ConsoleUrl, openCode)));
         foreach (var provider in _providers)
         {
             var source = provider;
             provider.ReadingAvailable += reading => _store.Put(reading);
             provider.HintChanged += hint => Dispatcher.BeginInvoke(() => SetHint(source, hint));
-            provider.Start();
+            if (IsShown(provider.Id)) provider.Start();   // a hidden app is not read at all
         }
 
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
@@ -133,7 +135,7 @@ public partial class App : Application
             _settings.Save();
         });
         _providers.Add(claudeWeb);
-        _signIns.Add(("Sign in to Claude…", () => OpenSignIn("Claude", ClaudeWebUsageParser.UsagePageUrl, claudeWeb)));
+        _signIns.Add((ProviderIds.Claude, "Sign in to Claudeâ€¦", () => OpenSignIn("Claude", ClaudeWebUsageParser.UsagePageUrl, claudeWeb)));
     }
 
     void SetHint(IUsageProvider source, string? hint)
@@ -164,7 +166,7 @@ public partial class App : Application
     void RenderNow()
     {
         var now = DateTimeOffset.Now;
-        var apps = StripModel.Build(_store.Current, MergedHints(now), now);
+        var apps = StripModel.Build(_store.Current, MergedHints(now), now, _settings.HiddenProviders);
         var theme = Theme.For(_themeWatcher.IsLight);
         _strip.Render(apps, theme);
         if (_panel is { IsVisible: true })
@@ -237,7 +239,7 @@ public partial class App : Application
         _panel = new HoverPanel();
         _panel.MouseEnter += (_, _) => _hoverHide.Stop();
         _panel.MouseLeave += (_, _) => _hoverHide.Start();
-        _panel.Render(StripModel.Build(_store.Current, MergedHints(now), now), Theme.For(_themeWatcher.IsLight), now);
+        _panel.Render(StripModel.Build(_store.Current, MergedHints(now), now, _settings.HiddenProviders), Theme.For(_themeWatcher.IsLight), now);
         _panel.Opacity = 0;   // shown first so it has a size, then moved, then revealed
         _panel.Show();
         _panel.UpdateLayout();
@@ -272,10 +274,16 @@ public partial class App : Application
 
         var menu = new ContextMenu();
         menu.Items.Add(Item("Refresh now", RefreshAll));
-        foreach (var (label, open) in _signIns) menu.Items.Add(Item(label, open));
+        foreach (var (id, label, open) in _signIns)
+            if (IsShown(id)) menu.Items.Add(Item(label, open));
 
-        if (ClaudeHookInstaller.IsInstalled()) menu.Items.Add(Item("Disconnect Claude Code", DisconnectClaude));
-        else menu.Items.Add(Item("Connect Claude Code…", ConnectClaude));
+        if (IsShown(ProviderIds.Claude))
+        {
+            if (ClaudeHookInstaller.IsInstalled()) menu.Items.Add(Item("Disconnect Claude Code", DisconnectClaude));
+            else menu.Items.Add(Item("Connect Claude Codeâ€¦", ConnectClaude));
+        }
+
+        menu.Items.Add(AppsMenu());
 
         var autostart = Item("Start with Windows", () =>
         {
@@ -297,6 +305,39 @@ public partial class App : Application
         menu.PlacementTarget = _strip;
         menu.Placement = PlacementMode.MousePoint;
         menu.IsOpen = true;
+    }
+
+    /// <summary>"Show" submenu: one tick per app. The last ticked app cannot be unticked.</summary>
+    MenuItem AppsMenu()
+    {
+        var show = new MenuItem { Header = "Show" };
+        var visible = ShownApps.Visible(_settings.HiddenProviders);
+        foreach (var (id, name) in ShownApps.All)
+        {
+            var shown = visible.Any(a => a.Id == id);
+            var item = Item(name, () => ToggleApp(id));
+            item.IsCheckable = true;
+            item.IsChecked = shown;
+            item.IsEnabled = !(shown && visible.Count == 1);
+            show.Items.Add(item);
+        }
+        return show;
+    }
+
+    void ToggleApp(string id)
+    {
+        _settings.HiddenProviders = ShownApps.Toggle(_settings.HiddenProviders, id).ToList();
+        _settings.Save();
+
+        var shown = IsShown(id);
+        foreach (var provider in _providers.Where(p => p.Id == id))
+        {
+            if (shown) provider.Start();   // reads straight away
+            else provider.Stop();
+        }
+        RenderNow();
+        // The strip changed width; keep its right edge by the tray once the new size is laid out.
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, Place);
     }
 
     SignInWindow? _signInWindow;
@@ -328,7 +369,7 @@ public partial class App : Application
 
     void RefreshAll()
     {
-        foreach (var provider in _providers)
+        foreach (var provider in _providers.Where(p => IsShown(p.Id)))
         {
             // Providers swallow their own failures; this also guards against one that does not.
             _ = provider.RefreshAsync().ContinueWith(_ => { }, TaskScheduler.Default);

@@ -15,7 +15,8 @@ has gone by, so you can see at a glance whether you are ahead of the clock.
 
 Hover over the strip for every window (including OpenCode's monthly one), percent used, time to reset
 and how old each reading is. Right-click for **Refresh now**, **Sign in to Claude…**, **Sign in to OpenCode…**,
-**Connect / Disconnect Claude Code**, **Start with Windows** and **Quit**. Drag the strip sideways to
+**Connect / Disconnect Claude Code**, **Show** (tick which apps appear; a hidden app is not read, and
+its sign-in items leave the menu), **Start with Windows** and **Quit**. Drag the strip sideways to
 move it along the taskbar; the position is remembered.
 
 The colours follow the Windows mode that colours the taskbar (Settings › Personalisation › Colours ›
@@ -118,7 +119,7 @@ Everything lives in `%AppData%\Battery`:
 
 | File | What |
 |---|---|
-| `settings.json` | strip position, Start with Windows |
+| `settings.json` | strip position, Start with Windows, hidden apps |
 | `readings.json` | last reading per app, so a restart shows bars immediately |
 | `claude-status.json` | the last blob Claude Code passed to the status line |
 | `statusline-chain.txt` | your previous status-line command, while Claude Code is connected |
