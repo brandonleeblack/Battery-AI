@@ -434,6 +434,8 @@ public partial class App : Application
             return;
         }
         _signInWindow = new SignInWindow(provider.ServiceName, provider.PageUrl, provider.Profile);
+        // Confirm as soon as the window reaches the site after signing in, not only when it is closed.
+        _signInWindow.PageShown += url => { if (!IsConnected(provider.Id)) provider.PageShownInSignInWindow(url); };
         _signInWindow.Closed += (_, _) =>
         {
             _signInWindow = null;

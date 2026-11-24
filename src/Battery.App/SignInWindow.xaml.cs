@@ -8,6 +8,9 @@ namespace Battery.App;
 /// </summary>
 public partial class SignInWindow : Window
 {
+    /// <summary>The address of each page the window shows (address only; nothing on the page is read).</summary>
+    public event Action<string>? PageShown;
+
     public SignInWindow(string serviceName, string startUrl, string? profile)
     {
         InitializeComponent();
@@ -20,6 +23,8 @@ public partial class SignInWindow : Window
             {
                 var env = await WebUsageReader.Environment;
                 await Web.EnsureCoreWebView2Async(env, WebProfiles.Options(env, profile));
+                Web.CoreWebView2.NavigationCompleted += (_, e) => { if (e.IsSuccess) PageShown?.Invoke(Web.CoreWebView2.Source); };
+                Web.CoreWebView2.SourceChanged += (_, _) => PageShown?.Invoke(Web.CoreWebView2.Source);   // single-page sites
                 Web.CoreWebView2.Navigate(startUrl);
             }
             catch (Exception e)

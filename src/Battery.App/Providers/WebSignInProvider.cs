@@ -105,12 +105,26 @@ public sealed class WebSignInProvider : IUsageProvider
 
     public Task RefreshAsync() => _dispatcher.InvokeAsync(ReadOnceAsync).Task.Unwrap();
 
+    /// <summary>
+    /// The sign-in window reached one of the site's own pages (not its sign-in pages): the user has
+    /// probably just signed in, so read now to confirm, unless a read is already under way.
+    /// </summary>
+    public void PageShownInSignInWindow(string url)
+    {
+        if (!url.StartsWith("http", StringComparison.OrdinalIgnoreCase) || _isSignInPage(url)) return;
+        if (_reading) return;
+        _ = RefreshAsync();
+    }
+
+    bool _reading;
+
     /// <summary>Signs Battery out of this site only (clears this site's profile).</summary>
     public Task<bool> SignOutAsync() => _reader.SignOutAsync(_source, Profile);
 
     async Task ReadOnceAsync()
     {
         _lastRead = DateTimeOffset.Now;
+        _reading = true;
         var connection = AppConnections.For(Id);
         try
         {
@@ -145,6 +159,10 @@ public sealed class WebSignInProvider : IUsageProvider
         catch
         {
             HintChanged?.Invoke(string.Format(UnreachableHintFormat, _siteName));
+        }
+        finally
+        {
+            _reading = false;
         }
     }
 }
