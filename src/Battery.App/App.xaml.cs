@@ -1,7 +1,9 @@
 using System.Windows;
 using System.Windows.Threading;
 using Battery.App.Native;
+using Battery.App.Providers;
 using Battery.Core;
+using Battery.Core.Providers;
 using Microsoft.Win32;
 
 namespace Battery.App;
@@ -9,12 +11,17 @@ namespace Battery.App;
 public partial class App : Application
 {
     static readonly TimeSpan PlaceEvery = TimeSpan.FromSeconds(2);
+    static readonly TimeSpan RenderEvery = TimeSpan.FromSeconds(30);
 
     Mutex? _singleInstance;
     Settings _settings = new();
     StripWindow _strip = null!;
     SystemThemeWatcher _themeWatcher = null!;
     DispatcherTimer _placeTimer = null!;
+    DispatcherTimer _renderTimer = null!;
+    ReadingStore _store = null!;
+    readonly List<IUsageProvider> _providers = new();
+    readonly Dictionary<string, string> _hints = new();   // UI thread only
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -33,21 +40,37 @@ public partial class App : Application
         _themeWatcher = new SystemThemeWatcher();
         _themeWatcher.Changed += _ => RenderNow();
 
+        _store = new ReadingStore(AppPaths.ReadingsFile);
+        _store.Changed += () => Dispatcher.BeginInvoke(RenderNow);
+
         _strip = new StripWindow();
         _strip.DragFinished += OnDragFinished;
         _strip.DpiChanged += (_, _) => Dispatcher.BeginInvoke(Place);
-        RenderNow();
+        RenderNow();   // last saved readings show immediately
         _strip.Show();
         Place();
 
+        _providers.Add(new CodexProvider());
+        foreach (var provider in _providers)
+        {
+            var id = provider.Id;
+            provider.ReadingAvailable += reading => _store.Put(reading);
+            provider.HintChanged += hint => Dispatcher.BeginInvoke(() => SetHint(id, hint));
+            provider.Start();
+        }
+
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
         _placeTimer = new DispatcherTimer(PlaceEvery, DispatcherPriority.Background, (_, _) => Place(), Dispatcher);
+        // The clock lines move and readings go stale even when nothing new arrives.
+        _renderTimer = new DispatcherTimer(RenderEvery, DispatcherPriority.Background, (_, _) => RenderNow(), Dispatcher);
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
         SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         _placeTimer?.Stop();
+        _renderTimer?.Stop();
+        foreach (var provider in _providers) provider.Stop();
         _themeWatcher?.Dispose();
         if (_singleInstance is not null)
         {
@@ -59,7 +82,19 @@ public partial class App : Application
 
     void OnDisplaySettingsChanged(object? sender, EventArgs e) => Dispatcher.BeginInvoke(Place);
 
-    void RenderNow() => _strip.Render(SampleApps(), Theme.For(_themeWatcher.IsLight));
+    void SetHint(string providerId, string? hint)
+    {
+        _hints.TryGetValue(providerId, out var current);
+        if (current == hint) return;
+        if (hint is null) _hints.Remove(providerId); else _hints[providerId] = hint;
+        RenderNow();
+    }
+
+    void RenderNow()
+    {
+        var apps = StripModel.Build(_store.Current, _hints, DateTimeOffset.Now);
+        _strip.Render(apps, Theme.For(_themeWatcher.IsLight));
+    }
 
     /// <summary>Puts the strip on the taskbar, re-asserts topmost, and hides it when it should not show.</summary>
     void Place()
@@ -93,26 +128,5 @@ public partial class App : Application
             _settings.Save();
         }
         Place();
-    }
-
-    /// <summary>Fixed bars matching the mockup; replaced by live readings in Task 8.</summary>
-    static IReadOnlyList<AppView> SampleApps()
-    {
-        static BarView Bar(WindowKind kind, double used, double clock) =>
-            new(kind, used, clock, PaceCalculator.StateFor(used, clock), false, false, null);
-
-        static AppView App(string id, string name, (double Used, double Clock) five, (double Used, double Clock) week)
-        {
-            var f = Bar(WindowKind.FiveHour, five.Used, five.Clock);
-            var w = Bar(WindowKind.Weekly, week.Used, week.Clock);
-            return new AppView(id, name, f, w, new[] { f, w }, null, null);
-        }
-
-        return new[]
-        {
-            App(ProviderIds.Claude, "Claude", (38, 55), (66, 55)),
-            App(ProviderIds.Codex, "Codex", (82, 60), (34, 42)),
-            App(ProviderIds.OpenCode, "OpenCode Go", (12, 19), (26, 29)),
-        };
     }
 }
